@@ -112,7 +112,7 @@ public class MainActivity extends Activity {
     private Button pill(String value) {
         Button b = new Button(this);
         b.setText(value);
-        b.setTextAllCaps(false);
+        b.setAllCaps(false);
         b.setTextSize(14);
         b.setBackground(bg(Color.rgb(238,238,238), 18));
         return b;
