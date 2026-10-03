@@ -91,3 +91,5 @@ Wikipedia bootstrap -> coverage-based read-only research browser -> independent 
 
 Final 0.0.3 sync: sparse 50M engine, multi-key API, public-web research,
 observer dashboard, and guarded self-improvement modes are now part of the backend.
+
+Final sparse-loader verification synced after successful 0.0.3 CI.
