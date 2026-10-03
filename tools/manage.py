@@ -50,7 +50,12 @@ def cmd_upgrade50m():
     if not KEYS.exists():
         KEYS.write_text('{"keys":[]}\n');KEYS.chmod(0o600)
 
+    image64=ROOT/"models/image-64.bin"
+    if not image64.exists():
+        run([ROOT/"build/reai","image-init",image64,"64","256"])
+
     env_set(AI_ENV,"REAI_TEXT_MODEL",ROOT/"models/workers/worker-0.bin")
+    env_set(AI_ENV,"REAI_IMAGE_MODEL",image64)
     env_set(AI_ENV,"REAI_API_KEYS_FILE",KEYS)
 
     learn_env=Path("/etc/reai-learning.env")
