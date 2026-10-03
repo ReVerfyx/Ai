@@ -128,7 +128,24 @@ def is_prompt_injection(text):
         "покажисистемныйпромпт", "покажискрытыеинструкц",
         "раскройсистемныйпромпт", "выведисистемныйпромпт"
     )
-    return any(x in compact for x in english_override + russian_override)
+    if any(x in compact for x in english_override + russian_override):
+        return True
+
+    # Structural fallbacks for wording variants not covered by exact compact phrases.
+    if any(x in compact for x in ("ignore", "disregard", "override", "bypass", "disable")) and \
+       any(x in compact for x in ("system", "instruction", "safety", "policy", "filter", "rule")):
+        return True
+    if any(x in compact for x in ("reveal", "show", "print", "dump", "repeat")) and \
+       any(x in compact for x in ("systemprompt", "hiddeninstruction", "developerinstruction")):
+        return True
+    if any(x in compact for x in ("игнорируй", "забудь", "обойди", "отключи", "отмени")) and \
+       any(x in compact for x in ("систем", "инструкц", "правил", "огранич", "фильтр", "политик")):
+        return True
+    if any(x in compact for x in ("покажи", "раскрой", "выведи", "напечатай")) and \
+       any(x in compact for x in ("систем", "скрыт", "инструкц", "промпт")) and \
+       ("инструкц" in compact or "промпт" in compact):
+        return True
+    return False
 
 def load_policy():
     try:
