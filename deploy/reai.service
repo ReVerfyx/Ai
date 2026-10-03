@@ -1,0 +1,17 @@
+[Unit]
+Description=ReVerfyx AI API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/reai
+Environment=REAI_HOST=127.0.0.1
+Environment=REAI_PORT=8080
+ExecStart=/usr/bin/python3 /opt/reai/api/server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
