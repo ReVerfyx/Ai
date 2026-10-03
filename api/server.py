@@ -154,14 +154,14 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/v1/chat/completions":
                 messages = data.get("messages") or []
 
-                # Security checks are outside the model and cannot be overridden by prompting.
+                # Only untrusted user input is policy-checked here.
+                # System/developer messages are trusted control text; checking them
+                # caused the server to block its own political-neutrality prompt.
                 for m in messages:
+                    if str(m.get("role", "user")) != "user":
+                        continue
                     content = str(m.get("content", ""))
-                    ok, rule = check_text(
-                        content,
-                        "chat",
-                        detect_injection=(str(m.get("role", "user")) == "user")
-                    )
+                    ok, rule = check_text(content, "chat", detect_injection=True)
                     if not ok:
                         return self.send_json(400, public_error(rule))
 
