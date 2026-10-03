@@ -21,6 +21,15 @@ LOG = ROOT / "data/self-improve/history.jsonl"
 
 ALLOW_PREFIX = ("src/","include/","api/","tools/")
 DENY_PREFIX = ("policy/","deploy/","host.sh",".github/")
+AUTO_SAFE = {
+    "src/sparse_text_model.cpp",
+    "include/sparse_text_model.hpp",
+    "tools/auto_research.py",
+    "tools/progress.py",
+    "tools/web_search.py",
+}
+AUTO_PROMOTE = False
+
 TARGETS = [
     ("tools/auto_research.py","Improve reliability, observability, and research quality without executing downloaded code."),
     ("api/server.py","Improve API reliability and concurrency without weakening policy."),
@@ -106,6 +115,63 @@ def record(event):
         f.write(json.dumps(event,ensure_ascii=False)+"\n")
     print(json.dumps(event,ensure_ascii=False),flush=True)
 
+def health_ok():
+    try:
+        with urlopen("http://127.0.0.1:8080/health", timeout=15) as r:
+            return json.loads(r.read().decode()).get("ok") is True
+    except Exception:
+        return False
+
+def promote(commit, paths):
+    if not AUTO_PROMOTE or not paths or not paths.issubset(AUTO_SAFE):
+        return False, "candidate-only"
+
+    status = sh(["git","status","--porcelain","--untracked-files=no"], cwd=ROOT, check=False)
+    if status.stdout.strip():
+        return False, "production-tree-not-clean"
+
+    cp = sh(["git","cherry-pick",commit], cwd=ROOT, check=False)
+    if cp.returncode:
+        sh(["git","cherry-pick","--abort"], cwd=ROOT, check=False)
+        return False, "cherry-pick-failed"
+
+    build = ROOT/"build"
+    ok = True
+    detail = "OK"
+    for cmd in (
+        ["cmake","-S",".","-B",str(build),"-DCMAKE_BUILD_TYPE=Release"],
+        ["cmake","--build",str(build),"-j1"],
+    ):
+        r = sh(cmd, cwd=ROOT, check=False)
+        if r.returncode:
+            ok = False
+            detail = (r.stderr or r.stdout)[-3000:]
+            break
+
+    if ok:
+        py = [str(p.relative_to(ROOT)) for p in ROOT.rglob("*.py")
+              if ".git" not in p.parts and "build" not in p.parts]
+        r = sh(["python3","-m","py_compile",*py], cwd=ROOT, check=False)
+        if r.returncode:
+            ok = False
+            detail = (r.stderr or r.stdout)[-3000:]
+
+    if ok:
+        sh(["systemctl","restart","reai"],check=False)
+        time.sleep(3)
+        ok = health_ok()
+        if not ok:
+            detail = "health-check-failed"
+
+    if ok:
+        return True, "promoted"
+
+    sh(["git","reset","--hard","HEAD^"],cwd=ROOT,check=False)
+    sh(["cmake","-S",".","-B",str(build),"-DCMAKE_BUILD_TYPE=Release"],cwd=ROOT,check=False)
+    sh(["cmake","--build",str(build),"-j1"],cwd=ROOT,check=False)
+    sh(["systemctl","restart","reai"],check=False)
+    return False, "rolled-back: " + detail
+
 def one():
     candidate_ready()
     target, goal = TARGETS[int(time.time()//1800) % len(TARGETS)]
@@ -158,6 +224,10 @@ CURRENT FILE:
         ],cwd=CAND,check=False)
         event["status"]="candidate-passed"
         event["commit"]=sh(["git","rev-parse","HEAD"],cwd=CAND).stdout.strip()
+        promoted, promote_status = promote(event["commit"], paths)
+        event["promotion"] = promote_status
+        if promoted:
+            event["status"] = "auto-promoted"
     else:
         event["status"]="tests-failed"
         event["detail"]=msg
@@ -169,7 +239,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop",action="store_true")
     ap.add_argument("--interval",type=int,default=1800)
+    ap.add_argument("--auto-promote",action="store_true")
     a = ap.parse_args()
+    global AUTO_PROMOTE
+    AUTO_PROMOTE = a.auto_promote
 
     while True:
         try:
