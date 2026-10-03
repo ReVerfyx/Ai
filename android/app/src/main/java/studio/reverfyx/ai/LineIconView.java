@@ -10,7 +10,7 @@ public class LineIconView extends View {
     public static final int MENU=1, SEARCH=2, EDIT=3, MORE=4, IMAGE=5, LIBRARY=6,
             FOLDER=7, CODE=8, CLOCK=9, PLUGIN=10, CHAT=11, PLUS=12, MIC=13,
             EFFORT=14, FILE=15, CAMERA=16, PHOTO=17, SHARE=18, PIN=19,
-            ARCHIVE=20, TRASH=21, HOME=22, CHECK=23;
+            ARCHIVE=20, TRASH=21, HOME=22, CHECK=23, SEND=24;
 
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private int kind;
@@ -97,6 +97,10 @@ public class LineIconView extends View {
                 q.moveTo(l,cy); q.lineTo(cx,t); q.lineTo(r,cy); q.lineTo(r,b); q.lineTo(cx+s*.08f,b); q.lineTo(cx+s*.08f,cy+s*.09f); q.lineTo(cx-s*.08f,cy+s*.09f); q.lineTo(cx-s*.08f,b); q.lineTo(l,b); q.close(); c.drawPath(q,p); break;
             case CHECK:
                 q.moveTo(l,cy); q.lineTo(cx-s*.03f,b-s*.05f); q.lineTo(r,t+s*.05f); c.drawPath(q,p); break;
+            case SEND:
+                c.drawLine(cx,b,cx,t+s*.04f,p);
+                c.drawLine(cx,t+s*.04f,cx-s*.14f,cy-s*.02f,p);
+                c.drawLine(cx,t+s*.04f,cx+s*.14f,cy-s*.02f,p); break;
         }
     }
 }
