@@ -1,32 +1,68 @@
 #!/usr/bin/env python3
-"""One self-learning cycle: crawl -> corpus -> candidate training -> backup -> promote."""
-import argparse, shutil, subprocess, time
+"""Continuous self-learning loop for ReVerfyx AI v0.0.2."""
+import argparse
+import os
+import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-ap=argparse.ArgumentParser()
-ap.add_argument("--seed",action="append",required=True)
-ap.add_argument("--pages",type=int,default=50)
-ap.add_argument("--model",default="models/text.bin")
-ap.add_argument("--bin",default="build/reai")
-ap.add_argument("--epochs",type=int,default=1)
-a=ap.parse_args()
+ap = argparse.ArgumentParser()
+ap.add_argument("--seed", action="append", default=[])
+ap.add_argument("--pages", type=int, default=50, help="pages per seed per cycle")
+ap.add_argument("--workers", type=int, default=min(2, os.cpu_count() or 1))
+ap.add_argument("--epochs", type=int, default=1, help="epochs per training cycle")
+ap.add_argument("--cycles", type=int, default=1, help="0 = run forever")
+ap.add_argument("--hours", type=float, default=0.0, help="0 = no time limit")
+ap.add_argument("--pause", type=float, default=5.0, help="seconds between cycles")
+ap.add_argument("--model", default="models/text.bin")
+ap.add_argument("--bin", default="build/reai")
+ap.add_argument("--same-host", action="store_true")
+a = ap.parse_args()
 
-root=Path(__file__).resolve().parents[1]
-model=root/a.model
-candidate=model.with_suffix(".candidate.bin")
+root = Path(__file__).resolve().parents[1]
+started = time.time()
+cycle = 0
 
-subprocess.check_call(["python3",str(root/"tools/crawl.py"),*a.seed,"--out",str(root/"data/web"),"--pages",str(a.pages),"--delay","1.0"])
-subprocess.check_call(["python3",str(root/"tools/build_corpus.py"),str(root/"data/web"),"--out",str(root/"data/corpus.txt")])
-if not model.exists():
-    subprocess.check_call([str(root/a.bin),"text-init",str(model),"128"])
+def crawl_one(index, seed):
+    target = root / "data" / "web" / f"source-{index}"
+    cmd = [
+        "python3", str(root / "tools/crawl.py"), seed,
+        "--out", str(target), "--pages", str(a.pages), "--delay", "1.0"
+    ]
+    if a.same_host:
+        cmd.append("--same-host")
+    subprocess.check_call(cmd)
 
-shutil.copy2(model,candidate)
-subprocess.check_call([str(root/a.bin),"text-train",str(candidate),str(root/"data/corpus.txt"),str(a.epochs),"64","0.0005"])
+while True:
+    cycle += 1
+    print(f"\n=== ReAI learning cycle {cycle} ===")
 
-if candidate.stat().st_size < 1024:
-    raise SystemExit("candidate checkpoint is invalid")
+    if a.seed:
+        with ThreadPoolExecutor(max_workers=min(a.workers, len(a.seed))) as pool:
+            futures = [pool.submit(crawl_one, i, seed) for i, seed in enumerate(a.seed)]
+            for f in futures:
+                f.result()
 
-backup=model.with_suffix(f".backup-{int(time.time())}.bin")
-shutil.copy2(model,backup)
-candidate.replace(model)
-print("promoted",model,"backup",backup)
+    web = root / "data" / "web"
+    web.mkdir(parents=True, exist_ok=True)
+    subprocess.check_call([
+        "python3", str(root / "tools/build_corpus.py"), str(web),
+        "--out", str(root / "data/corpus.txt")
+    ])
+
+    subprocess.check_call([
+        "python3", str(root / "tools/multi_train.py"),
+        "--workers", str(a.workers),
+        "--epochs", str(a.epochs),
+        "--model", a.model,
+        "--bin", a.bin
+    ])
+
+    if a.cycles > 0 and cycle >= a.cycles:
+        break
+    if a.hours > 0 and (time.time() - started) >= a.hours * 3600:
+        break
+    time.sleep(max(0.0, a.pause))
+
+print("self-learning finished")
