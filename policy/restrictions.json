@@ -1,29 +1,27 @@
 {
   "version": "0.0.2",
   "default_action": "allow",
+  "notes": "The highest-priority minor sexual-content prohibition is also hard-coded in policy/engine.py and cannot be disabled here.",
   "rules": [
     {
       "id": "sexual_content_involving_minors",
       "title": "Детская П@рн@",
-      "priority": 1000,
+      "priority": 1000000,
       "enabled": true,
+      "immutable": true,
       "action": "block",
-      "scope": ["chat", "image_generation", "file_analysis", "training_ingest"],
-      "reason": "Sexual content involving minors is prohibited.",
-      "match": {
-        "minor_terms": [
-          "ребенок", "ребёнок", "дети", "детская", "несовершеннолет",
-          "малолет", "child", "children", "minor", "underage"
-        ],
-        "sexual_terms": [
-          "порно", "п@рн@", "porn", "sexual", "sex", "nude", "naked",
-          "эротик", "explicit"
-        ],
-        "direct_terms": [
-          "детская п@рн@", "детское порно", "детская порнография",
-          "child porn", "child pornography", "csam"
-        ]
-      }
+      "scope": ["chat", "image_generation", "file_analysis", "training_ingest", "model_output"],
+      "reason": "Sexual content involving minors is prohibited under every prompting context."
+    },
+    {
+      "id": "prompt_injection",
+      "title": "Prompt injection",
+      "priority": 900000,
+      "enabled": true,
+      "immutable": true,
+      "action": "block",
+      "scope": ["chat"],
+      "reason": "Requests attempting to override, reveal, or disable system/safety instructions are blocked by the runtime guard."
     }
   ]
 }
