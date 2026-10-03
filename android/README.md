@@ -64,3 +64,11 @@ Continuous training:
 ```bash
 bash host.sh train
 ```
+
+
+## Modern UI refresh
+
+The launcher now uses `ModernMainActivity`, which replaces the earlier legacy
+drawer/composer shell. The refreshed client uses the current simplified mobile
+layout direction: compact header, horizontally grouped tools in the sidebar,
+minimal chat history, modern bottom composer, bottom sheets, and model modes.
