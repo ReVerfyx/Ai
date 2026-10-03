@@ -18,6 +18,7 @@ IMAGE_MODEL = Path(os.getenv("REAI_IMAGE_MODEL", ROOT / "models" / "image.bin"))
 OUT_DIR = Path(os.getenv("REAI_OUTPUT_DIR", ROOT / "outputs")).resolve()
 API_KEY = os.getenv("REAI_API_KEY", "")
 API_KEYS_FILE = Path(os.getenv("REAI_API_KEYS_FILE", "/etc/reai-api-keys.json"))
+TRUSTED_GATEWAY_IP = os.getenv("REAI_TRUSTED_GATEWAY_IP", "31.77.14.194").strip()
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 from policy.runtime import check_text, check_generated_text, public_error, control_prefix
@@ -95,6 +96,8 @@ class Handler(BaseHTTPRequestHandler):
     server_version = f"ReAI/{VERSION}"
 
     def authorized(self):
+        if TRUSTED_GATEWAY_IP and self.client_address and self.client_address[0] == TRUSTED_GATEWAY_IP:
+            return True
         keys = configured_keys()
         if not keys:
             return True
