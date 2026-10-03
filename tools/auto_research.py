@@ -2,7 +2,7 @@
 """Autonomous read-only research loop for ReVerfyx AI 0.0.2.
 
 Stage 1: targeted Wikipedia bootstrap.
-Stage 2: coverage-based research across Wikipedia and GitHub.
+Stage 2: coverage-based research across Wikipedia, GitHub, and the public web.
 No downloaded code is executed.
 """
 import argparse, base64, hashlib, json, os, random, shutil, subprocess, tempfile, time
@@ -10,6 +10,7 @@ from pathlib import Path
 from urllib.parse import urlencode, quote
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
+from web_search import fetch_results
 
 ROOT = Path(__file__).resolve().parents[1]
 TOPICS = json.loads((ROOT/"tools/research_topics.json").read_text(encoding="utf-8"))["topics"]
@@ -126,6 +127,29 @@ def fetch_github_topic(worker, topic):
                 print(f"[research] github file {full}/{item.get('path','')}: {e}",flush=True)
     return added
 
+def fetch_web_topic(worker, topic):
+    added = 0
+    query = str(topic.get("query") or "").strip()
+    if not query:
+        return 0
+    try:
+        for url, text in fetch_results(query, limit=2):
+            title = urlparse_title(url)
+            if save_doc(worker, url, title, text, "web"):
+                added += 1
+    except Exception as e:
+        print(f"[research] web search {query}: {e}", flush=True)
+    return added
+
+def urlparse_title(url):
+    try:
+        from urllib.parse import urlparse
+        u = urlparse(url)
+        tail = (u.path.rstrip("/").split("/")[-1] or u.netloc).replace("-", " ").replace("_", " ")
+        return (u.netloc + " — " + tail)[:180]
+    except Exception:
+        return url[:180]
+
 def load_state():
     if STATE.exists():
         try: return json.loads(STATE.read_text(encoding="utf-8"))
@@ -224,9 +248,10 @@ def main():
             print(f"[research] cycle={cycle} worker={w} topic={topic['id']}",flush=True)
             wiki=fetch_wiki_topic(w,topic)
             gh=fetch_github_topic(w,topic)
-            gained=wiki+gh
+            web=fetch_web_topic(w,topic)
+            gained=wiki+gh+web
             st.setdefault("coverage",{})[topic["id"]]=st["coverage"].get(topic["id"],0)+gained
-            last.append({"worker":w,"topic":topic["id"],"docs":gained,"wiki":wiki,"github":gh})
+            last.append({"worker":w,"topic":topic["id"],"docs":gained,"wiki":wiki,"github":gh,"web":web})
         st["cycles"]=cycle
         st["last"]=last
         st["updated"]=int(time.time())
