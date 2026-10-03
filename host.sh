@@ -153,6 +153,11 @@ EOF
     echo "Logs: bash host.sh logs learn"
     ;;
 
+  upgrade50m|key-new|keys|chat|image|observe|improve|improve-once|improve-log)
+    require_local
+    python3 "$ROOT/tools/manage.py" "$CMD" "$@"
+    ;;
+
   stop-train)
     sudo systemctl disable --now reai-trainer 2>/dev/null || true
     echo "TRAINING STOPPED"
@@ -243,6 +248,16 @@ Legacy continuous Wikipedia training:
 
 Check real learning progress:
   bash host.sh progress
+
+50M / API / observer:
+  bash host.sh upgrade50m
+  bash host.sh key-new phone
+  bash host.sh keys
+  bash host.sh chat "Привет"
+  bash host.sh image "ночные горы"
+  bash host.sh observe
+  bash host.sh improve
+  bash host.sh improve-log
 
 Other:
   bash host.sh stop-train
