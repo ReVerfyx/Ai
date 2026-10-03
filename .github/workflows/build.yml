@@ -19,6 +19,14 @@ jobs:
           printf 'hello world hello world\n' > /tmp/corpus.txt
           ./build/reai text-train /tmp/text.bin /tmp/corpus.txt 1 4 0.001
           ./build/reai text-generate /tmp/text.bin hello 8 1.0 8 >/tmp/out.txt
+      - name: Smoke test sparse checkpoint
+        run: |
+          ./build/reai sparse-init /tmp/sparse.bin 16 4 32 123
+          ./build/reai sparse-info /tmp/sparse.bin
+          printf 'hello sparse world hello sparse world\n' > /tmp/sparse-corpus.txt
+          ./build/reai sparse-train /tmp/sparse.bin /tmp/sparse-corpus.txt 1 4 0.001
+          ./build/reai sparse-generate /tmp/sparse.bin hello 8 1.0 8 >/tmp/sparse-out.txt
+
       - name: Smoke test image checkpoint
         run: |
           ./build/reai image-init /tmp/image.bin 4 8
@@ -33,7 +41,7 @@ jobs:
       - name: Python syntax
         run: |
           python3 -m py_compile api/server.py gateway/server.py policy/engine.py policy/runtime.py
-          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py tools/wiki_fetch.py tools/auto_research.py tools/progress.py
+          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py tools/wiki_fetch.py tools/auto_research.py tools/progress.py tools/web_search.py tools/observer.py tools/self_improve.py tools/manage.py
           PYTHONPATH=. python3 policy/test_runtime.py
 
       - name: Policy tests
