@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continuous self-learning loop for ReVerfyx AI v0.0.2."""
+"""Continuous independent self-learning loop for ReVerfyx AI 0.0.2."""
 import argparse
 import os
 import subprocess
@@ -9,13 +9,12 @@ from pathlib import Path
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--seed", action="append", default=[])
-ap.add_argument("--pages", type=int, default=50, help="pages per seed per cycle")
+ap.add_argument("--pages", type=int, default=50)
 ap.add_argument("--workers", type=int, default=min(2, os.cpu_count() or 1))
-ap.add_argument("--epochs", type=int, default=1, help="epochs per training cycle")
+ap.add_argument("--epochs", type=int, default=1)
 ap.add_argument("--cycles", type=int, default=1, help="0 = run forever")
 ap.add_argument("--hours", type=float, default=0.0, help="0 = no time limit")
-ap.add_argument("--pause", type=float, default=5.0, help="seconds between cycles")
-ap.add_argument("--model", default="models/text.bin")
+ap.add_argument("--pause", type=float, default=5.0)
 ap.add_argument("--bin", default="build/reai")
 ap.add_argument("--same-host", action="store_true")
 a = ap.parse_args()
@@ -24,8 +23,8 @@ root = Path(__file__).resolve().parents[1]
 started = time.time()
 cycle = 0
 
-def crawl_one(index, seed):
-    target = root / "data" / "web" / f"source-{index}"
+def crawl_for_worker(worker_id: int, seed: str):
+    target = root / "data" / "web" / f"worker-{worker_id}"
     cmd = [
         "python3", str(root / "tools/crawl.py"), seed,
         "--out", str(target), "--pages", str(a.pages), "--delay", "1.0"
@@ -36,11 +35,15 @@ def crawl_one(index, seed):
 
 while True:
     cycle += 1
-    print(f"\n=== ReAI learning cycle {cycle} ===")
+    print(f"\n=== ReAI independent learning cycle {cycle} ===")
 
     if a.seed:
+        # Seeds are distributed round-robin. Each crawl target belongs to one worker.
         with ThreadPoolExecutor(max_workers=min(a.workers, len(a.seed))) as pool:
-            futures = [pool.submit(crawl_one, i, seed) for i, seed in enumerate(a.seed)]
+            futures = [
+                pool.submit(crawl_for_worker, i % a.workers, seed)
+                for i, seed in enumerate(a.seed)
+            ]
             for f in futures:
                 f.result()
 
@@ -55,7 +58,6 @@ while True:
         "python3", str(root / "tools/multi_train.py"),
         "--workers", str(a.workers),
         "--epochs", str(a.epochs),
-        "--model", a.model,
         "--bin", a.bin
     ])
 
