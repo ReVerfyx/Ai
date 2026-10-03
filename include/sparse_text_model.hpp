@@ -26,7 +26,8 @@ public:
     uint32_t ff() const { return ff_; }
 
 private:
-    SparseTextModel() = default;
+    struct LoadTag {};
+    explicit SparseTextModel(LoadTag) {}
 
     uint32_t dim_ = 0;
     uint32_t experts_ = 0;
