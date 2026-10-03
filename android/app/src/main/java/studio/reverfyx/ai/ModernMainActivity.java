@@ -21,6 +21,7 @@ import android.speech.RecognizerIntent;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Base64;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
@@ -102,19 +103,91 @@ public class ModernMainActivity extends Activity {
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
-        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
-        setupSystemBars();
-
-        prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        token = prefs.getString("token", "");
-        username = prefs.getString("username", "");
-        currentMode = prefs.getString("mode", "Instant");
 
         try {
+            getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
+            setupSystemBars();
+
+            prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            token = prefs.getString("token", "");
+            username = prefs.getString("username", "");
+            currentMode = prefs.getString("mode", "Instant");
+
             if (token.isEmpty()) showAuth();
             else showApp();
         } catch (Throwable t) {
-            showStartupRecovery(t);
+            Log.e("ReVerfyxAI", "Startup crash", t);
+            showHardFallback(t);
+        }
+    }
+
+    private void showHardFallback(Throwable error) {
+        try {
+            if (prefs == null) {
+                prefs = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            }
+            prefs.edit()
+                    .putString("last_startup_error",
+                            error.getClass().getName() + ": " + String.valueOf(error.getMessage()))
+                    .remove("token")
+                    .remove("username")
+                    .apply();
+
+            token = "";
+            username = "";
+
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setGravity(Gravity.CENTER);
+            root.setPadding(40, 40, 40, 40);
+            root.setBackgroundColor(Color.WHITE);
+
+            TextView title = new TextView(this);
+            title.setText("ReVerfyx AI");
+            title.setTextColor(Color.BLACK);
+            title.setTextSize(26);
+            title.setGravity(Gravity.CENTER);
+            root.addView(title, new LinearLayout.LayoutParams(-1, -2));
+
+            TextView info = new TextView(this);
+            info.setText("Безопасный режим запуска\n" + error.getClass().getSimpleName());
+            info.setTextColor(0xff666666);
+            info.setTextSize(15);
+            info.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(-1, -2);
+            ilp.topMargin = 24;
+            root.addView(info, ilp);
+
+            TextView open = new TextView(this);
+            open.setText("Открыть вход");
+            open.setTextColor(Color.WHITE);
+            open.setTextSize(17);
+            open.setGravity(Gravity.CENTER);
+            open.setBackgroundColor(Color.BLACK);
+            LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(-1, 120);
+            olp.topMargin = 36;
+            root.addView(open, olp);
+
+            open.setOnClickListener(v -> {
+                try {
+                    showAuth();
+                } catch (Throwable t) {
+                    Log.e("ReVerfyxAI", "Auth screen crash", t);
+                    info.setText("Ошибка экрана входа:\n" + t.getClass().getSimpleName()
+                            + "\n" + String.valueOf(t.getMessage()));
+                }
+            });
+
+            setContentView(root);
+        } catch (Throwable fatal) {
+            Log.e("ReVerfyxAI", "Fallback crash", fatal);
+            TextView v = new TextView(this);
+            v.setBackgroundColor(Color.WHITE);
+            v.setTextColor(Color.BLACK);
+            v.setTextSize(18);
+            v.setGravity(Gravity.CENTER);
+            v.setText("ReVerfyx AI\nSafe mode");
+            setContentView(v);
         }
     }
 
@@ -200,24 +273,28 @@ public class ModernMainActivity extends Activity {
     }
 
     private void setupSystemBars() {
-        Window w = getWindow();
-        w.setStatusBarColor(Color.WHITE);
-        w.setNavigationBarColor(Color.WHITE);
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            WindowInsetsController c = w.getInsetsController();
-            if (c != null) {
-                c.setSystemBarsAppearance(
-                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
-                                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
-                        WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
-                                WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+        try {
+            Window w = getWindow();
+            w.setStatusBarColor(Color.WHITE);
+            w.setNavigationBarColor(Color.WHITE);
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                WindowInsetsController c = w.getInsetsController();
+                if (c != null) {
+                    c.setSystemBarsAppearance(
+                            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
+                                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS,
+                            WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS |
+                                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                    );
+                }
+            } else {
+                w.getDecorView().setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
+                                View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
                 );
             }
-        } else {
-            w.getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR |
-                            View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-            );
+        } catch (Throwable t) {
+            Log.w("ReVerfyxAI", "System bars setup skipped", t);
         }
     }
 
