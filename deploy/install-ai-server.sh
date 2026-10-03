@@ -30,12 +30,16 @@ REAI_API_KEY=$KEY
 REAI_TEXT_MODEL=$ROOT/models/workers/worker-0.bin
 REAI_IMAGE_MODEL=$ROOT/models/image.bin
 REAI_API_KEYS_FILE=/etc/reai-api-keys.json
+REAI_TRUSTED_GATEWAY_IP=31.77.14.194
 EOF
   sudo chmod 600 /etc/reai-ai.env
 fi
 
 if ! sudo grep -q '^REAI_API_KEYS_FILE=' /etc/reai-ai.env; then
   echo 'REAI_API_KEYS_FILE=/etc/reai-api-keys.json' | sudo tee -a /etc/reai-ai.env >/dev/null
+fi
+if ! sudo grep -q '^REAI_TRUSTED_GATEWAY_IP=' /etc/reai-ai.env; then
+  echo 'REAI_TRUSTED_GATEWAY_IP=31.77.14.194' | sudo tee -a /etc/reai-ai.env >/dev/null
 fi
 
 if [[ ! -f /etc/reai-api-keys.json ]]; then
