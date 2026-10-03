@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from policy.engine import check_text
+from policy.engine import check_text, sanitize_untrusted
 
 ap = argparse.ArgumentParser()
 ap.add_argument("inputs", nargs="+")
@@ -34,6 +34,7 @@ with out.open("w", encoding="utf-8") as w:
             if not ok:
                 blocked += 1
                 continue
+            s = sanitize_untrusted(s)
             h = hashlib.sha256(s.encode()).digest()
             if h in seen:
                 continue
