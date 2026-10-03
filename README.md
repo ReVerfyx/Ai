@@ -1,130 +1,216 @@
-# ReVerfyx AI
+# ReVerfyx AI — 0.0.2
 
-A small **from-scratch generative AI research core** designed to start on a CPU VPS and grow without depending on pretrained Llama, Qwen, DeepSeek, Stable Diffusion, or similar weights.
+From-scratch generative AI research project. The model weights start locally from
+random numbers; the project does not load pretrained Llama/Qwen/DeepSeek/Stable
+Diffusion weights.
 
-## From scratch
-
-- Random initial weights generated locally.
-- No HuggingFace model downloads.
-- No PyTorch, TensorFlow, or Transformers runtime.
-- Byte-level text model and backpropagation are implemented in C++20.
-- Prompt-conditioned image denoiser and backpropagation are implemented in C++20.
-- Project-specific binary checkpoint formats.
-- Web crawler, corpus builder, self-learning loop, and API use the Python standard library.
-
-v0.1 is deliberately small enough to run on a CPU VPS. It is a trainable foundation, not yet comparable in quality to large frontier models.
-
-## Install on Ubuntu
-
-```bash
-git clone https://github.com/ReVerfyx/Ai.git
-cd Ai
-chmod +x install.sh
-./install.sh
-```
-
-## Text model
-
-Create random weights:
-
-```bash
-./build/reai text-init models/text.bin 128
-```
-
-Train:
-
-```bash
-./build/reai text-train models/text.bin data/corpus.txt 5 64 0.001
-```
-
-Generate:
-
-```bash
-./build/reai text-generate models/text.bin "user: Привет
-assistant:" 300 0.85 40
-```
-
-The v0.1 text core is a byte-level recurrent network with manually implemented BPTT and Adam. It was chosen first because it can genuinely train on a CPU VPS. A native Transformer core is planned next.
-
-## Image generation
-
-This is **not Stable Diffusion**. The image model starts from random weights and learns from your own image-caption pairs.
-
-Training images currently use PPM P6/P3. A manifest line is:
+## 0.0.2 architecture
 
 ```text
-images/red_square.ppm	a red square
+Android
+   |
+   v
+31.77.14.194:8090
+Application Gateway
+- users / login
+- SQLite database
+- chat history
+- files
+- generated media
+- central restrictions
+   |
+   v
+2.26.85.86:8080
+AI Core
+- text model
+- image generator
+- independent trainers
 ```
 
-Create, train, generate:
+The Android APK contains only the gateway address. It does not contain the AI
+server address or the AI-server API key.
 
-```bash
-./build/reai image-init models/image.bin 32 256
-./build/reai image-train models/image.bin data/images.tsv 20 0.0005
-./build/reai image-generate models/image.bin "a red sunset over mountains" outputs/test.ppm 32
+## What is implemented
+
+- C++20 text model with locally generated random weights.
+- Manual forward/backward training and Adam optimizer.
+- Prompt-conditioned from-scratch image denoiser.
+- Chat and image-generation API.
+- Internet crawler and corpus builder.
+- Continuous learning for any chosen number of cycles/hours.
+- Two or more independent CPU workers.
+- Per-worker web data, corpus and checkpoint.
+- Atomic worker checkpoint replacement during training.
+- Central machine-readable restriction policy.
+- Separate application gateway with account registration/login.
+- PBKDF2 password hashing and expiring bearer sessions.
+- SQLite chat/message/user database.
+- Chat create/list/history/rename/delete.
+- Text/code file attachment and analysis.
+- Image generation proxied through the gateway.
+- Android client with ChatGPT-inspired chat layout, drawer/history/search,
+  new chats, files, image generation, copy, voice-to-text and account UI.
+
+## Important worker behavior
+
+`worker-0` and `worker-1` are independent.
+
+```text
+worker-0 web -> worker-0 corpus -> worker-0.bin
+worker-1 web -> worker-1 corpus -> worker-1.bin
 ```
 
-v0.1 generates 32x32 PPM images so the entire training and inference path can remain small and independently implemented.
+There is **no automatic weight averaging, merging or cross-training**.
 
-## Learn from the internet
+The default production API serves `models/workers/worker-0.bin`. Worker-1 is
+an independent alternative/research branch.
 
-The crawler respects robots.txt, identifies itself, rate-limits requests, extracts visible text, and stores source URLs.
+## Install AI server — 2.26.85.86
 
 ```bash
-python3 tools/crawl.py https://example.org --same-host --pages 30 --out data/web
-python3 tools/build_corpus.py data/web --out data/corpus.txt
-./build/reai text-train models/text.bin data/corpus.txt 1 64 0.0005
+sudo apt update
+sudo apt install -y git
+sudo mkdir -p /opt/reai
+sudo chown "$USER":"$USER" /opt/reai
+git clone https://github.com/ReVerfyx/Ai.git /opt/reai
+cd /opt/reai
+bash deploy/install-ai-server.sh
 ```
 
-Automated cycle:
+Get the generated backend key:
 
 ```bash
-python3 tools/self_learn.py --seed https://example.org --pages 30
+sudo grep '^REAI_API_KEY=' /etc/reai-ai.env
 ```
 
-It trains a candidate checkpoint and keeps a backup before promotion. A held-out quality gate is planned before unattended long-term training.
-
-## API
-
-Start:
+Check:
 
 ```bash
-python3 api/server.py
-```
-
-Health:
-
-```bash
+sudo systemctl status reai --no-pager
 curl http://127.0.0.1:8080/health
 ```
 
-Chat:
+If UFW is already in use, expose the AI API only to the gateway:
 
 ```bash
-curl -s http://127.0.0.1:8080/v1/chat/completions   -H 'Content-Type: application/json'   -d '{"messages":[{"role":"user","content":"Привет"}],"max_tokens":100}'
+sudo ufw allow from 31.77.14.194 to any port 8080 proto tcp
 ```
 
-Image generation:
+## Install gateway/user server — 31.77.14.194
+
+Copy the API key printed on the AI server, then:
 
 ```bash
-curl -s http://127.0.0.1:8080/v1/images/generations   -H 'Content-Type: application/json'   -d '{"prompt":"red sunset over mountains","steps":32}'
+sudo apt update
+sudo apt install -y git
+sudo mkdir -p /opt/reai
+sudo chown "$USER":"$USER" /opt/reai
+git clone https://github.com/ReVerfyx/Ai.git /opt/reai
+cd /opt/reai
+REAI_AI_KEY='PASTE_AI_SERVER_KEY_HERE' bash deploy/install-gateway-server.sh
 ```
 
-## Disk budget for a ~50 GB free VPS
+Check:
 
-Keep training data sharded and rotate old checkpoints. A reasonable first target is 10-20 GB of text/code data, 10-15 GB of image data, up to 5 GB of checkpoints/backups, and at least 8-10 GB kept free for builds, temporary data, and the OS.
+```bash
+sudo systemctl status reai-gateway --no-pager
+curl http://127.0.0.1:8090/health
+```
 
-## Roadmap
+The Android app uses:
 
-- Native causal Transformer with multi-head attention and RoPE.
-- Held-out evaluation gate before automatic checkpoint promotion.
-- Code-project ingestion and code-specific training shards.
-- 64/128 px convolutional-attention image generator.
-- Image-understanding encoder.
-- Video frame + temporal model.
-- Quantized inference.
-- Optional project-owned CUDA backend.
+```text
+http://31.77.14.194:8090
+```
+
+For public deployment, put HTTPS in front of the gateway before using real
+passwords outside testing.
+
+## Train for as long as you want
+
+Example: two independent CPU workers, indefinitely:
+
+```bash
+cd /opt/reai
+python3 tools/self_learn.py \
+  --workers 2 \
+  --cycles 0 \
+  --pages 40 \
+  --epochs 1 \
+  --seed https://ru.wikipedia.org/wiki/Заглавная_страница \
+  --seed https://en.wikipedia.org/wiki/Main_Page
+```
+
+Train for 12 hours instead:
+
+```bash
+python3 tools/self_learn.py \
+  --workers 2 \
+  --cycles 0 \
+  --hours 12 \
+  --pages 40 \
+  --epochs 1 \
+  --seed https://ru.wikipedia.org/wiki/Заглавная_страница \
+  --seed https://en.wikipedia.org/wiki/Main_Page
+```
+
+Use more workers only if the VPS actually has more CPU capacity.
+
+## Restriction list
+
+Machine-readable rules:
+
+```text
+policy/restrictions.json
+```
+
+Runtime checker:
+
+```text
+policy/engine.py
+```
+
+The same policy is checked at the gateway, at the AI API, and while building
+training corpora. The list is deliberately separate from model weights.
+
+## Android
+
+Project:
+
+```text
+android/
+```
+
+Build with JDK 17 + Gradle 9.6:
+
+```bash
+cd android
+gradle assembleDebug
+```
+
+APK:
+
+```text
+android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+GitHub Actions also builds a debug APK artifact.
+
+Android Gradle Plugin is pinned to 9.4.0.
+
+## Current model limitations
+
+0.0.2 is a real trainable foundation, but it is intentionally tiny enough for a
+small CPU VPS. It is not yet comparable to frontier models.
+
+Current native core:
+- text generation/training: yes;
+- image generation/training: yes;
+- code/text-file analysis: yes, by putting file text into model context;
+- image understanding: not yet;
+- video understanding: not yet;
+- native speech model: not yet (Android client uses Android speech recognition).
 
 ## License
 
-The repository's existing LICENSE is preserved unchanged.
+The repository's original MIT `LICENSE` is preserved unchanged.
