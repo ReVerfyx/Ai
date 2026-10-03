@@ -126,7 +126,8 @@ WantedBy=multi-user.target
     print("Observer: http://127.0.0.1:8765")
     print("Open that address in a browser inside the RDP session.")
 
-def cmd_improve():
+def cmd_improve(auto=False):
+    extra = " --auto-promote" if auto else ""
     write_service("reai-self-improve",f"""[Unit]
 Description=ReVerfyx AI self-improvement candidate loop
 After=reai.service network-online.target
@@ -134,14 +135,14 @@ After=reai.service network-online.target
 Type=simple
 User={os.getenv('USER','root')}
 WorkingDirectory={ROOT}
-ExecStart=/usr/bin/python3 {ROOT}/tools/self_improve.py --loop --interval 1800
+ExecStart=/usr/bin/python3 {ROOT}/tools/self_improve.py --loop --interval 1800{extra}
 Restart=on-failure
 RestartSec=60
 Nice=12
 [Install]
 WantedBy=multi-user.target
 """)
-    print("Self-improvement candidate loop enabled.")
+    print("Self-improvement loop enabled." + (" Safe auto-promotion ON." if auto else " Candidate-only mode."))
 
 def cmd_improve_log():
     p=ROOT/"data/self-improve/history.jsonl"
@@ -157,7 +158,8 @@ def main():
     elif cmd=="chat":cmd_chat(" ".join(args) or "Привет")
     elif cmd=="image":cmd_image(" ".join(args) or "mountains at night")
     elif cmd=="observe":cmd_observe()
-    elif cmd=="improve":cmd_improve()
+    elif cmd=="improve":cmd_improve(False)
+    elif cmd=="improve-auto":cmd_improve(True)
     elif cmd=="improve-once":run(["python3",ROOT/"tools/self_improve.py"])
     elif cmd=="improve-log":cmd_improve_log()
     else:raise SystemExit("unknown manage command: "+cmd)
