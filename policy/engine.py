@@ -110,7 +110,25 @@ def _hard_minor_sexual_match(text):
 
 def is_prompt_injection(text):
     s = _base(text)
-    return any(p.search(s) for p in _INJECTION_PATTERNS)
+    if any(p.search(s) for p in _INJECTION_PATTERNS):
+        return True
+
+    compact = _compact(s)
+    # Compact checks catch punctuation/spacing tricks such as
+    # "i.g.n.o.r.e previous instructions".
+    english_override = (
+        "ignoreprevious", "ignoreallprevious", "disregardsystem",
+        "overridesystem", "bypasssafety", "disablefilter",
+        "revealsystemprompt", "printsystemprompt", "hiddensystemprompt",
+        "developerinstructions", "jailbreak"
+    )
+    russian_override = (
+        "игнорируйпредыдущ", "игнорируйвсеправил", "обойдисистем",
+        "обойдиогранич", "отключифильтр", "отключиправил",
+        "покажисистемныйпромпт", "покажискрытыеинструкц",
+        "раскройсистемныйпромпт", "выведисистемныйпромпт"
+    )
+    return any(x in compact for x in english_override + russian_override)
 
 def load_policy():
     try:
