@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """Independent parallel trainers for ReVerfyx AI 0.0.2.
 
-Every worker owns its own checkpoint and its own corpus shard.
-Workers NEVER average, merge, copy learned weights into each other, or
-automatically replace the production model.
+Each worker has its own checkpoint. No averaging, merging or automatic promotion.
+With --corpus-dir, worker N trains only from worker-N.txt.
 """
 import argparse
 import os
@@ -40,17 +39,17 @@ def ensure_worker(binary: Path, production: Path, worker_model: Path, hidden: in
     else:
         subprocess.check_call([str(binary), "text-init", str(worker_model), str(hidden)])
 
-def train_worker(binary: Path, worker_id: int, model: Path, shard: Path,
+def train_worker(binary: Path, worker_id: int, model: Path, corpus: Path,
                  epochs: int, seq_len: int, lr: float):
-    if shard.stat().st_size <= seq_len + 2:
-        print(f"[worker {worker_id}] skipped: shard too small")
+    if not corpus.exists() or corpus.stat().st_size <= seq_len + 2:
+        print(f"[worker {worker_id}] skipped: corpus missing/too small: {corpus}")
         return
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = "1"
     env["OPENBLAS_NUM_THREADS"] = "1"
-    print(f"[worker {worker_id}] independent model={model.name} shard={shard.name}")
+    print(f"[worker {worker_id}] independent checkpoint={model} corpus={corpus}")
     subprocess.check_call([
-        str(binary), "text-train", str(model), str(shard),
+        str(binary), "text-train", str(model), str(corpus),
         str(epochs), str(seq_len), str(lr)
     ], env=env)
 
@@ -59,6 +58,7 @@ def main():
     ap.add_argument("--production-model", default="models/text.bin")
     ap.add_argument("--workers-dir", default="models/workers")
     ap.add_argument("--corpus", default="data/corpus.txt")
+    ap.add_argument("--corpus-dir", default="", help="directory containing worker-N.txt; keeps training data independent")
     ap.add_argument("--shards-dir", default="data/worker-shards")
     ap.add_argument("--bin", default="build/reai")
     ap.add_argument("--workers", type=int, default=min(2, os.cpu_count() or 1))
@@ -71,31 +71,35 @@ def main():
     root = Path(__file__).resolve().parents[1]
     binary = (root / args.bin).resolve()
     production = (root / args.production_model).resolve()
-    corpus = (root / args.corpus).resolve()
     workers_dir = (root / args.workers_dir).resolve()
-    shards_dir = (root / args.shards_dir).resolve()
     workers = max(1, args.workers)
 
-    shards = split_corpus(corpus, shards_dir, workers)
+    if args.corpus_dir:
+        cdir = (root / args.corpus_dir).resolve()
+        corpora = [cdir / f"worker-{i}.txt" for i in range(workers)]
+    else:
+        corpus = (root / args.corpus).resolve()
+        corpora = split_corpus(corpus, (root / args.shards_dir).resolve(), workers)
+
     jobs = []
     for i in range(workers):
         model = workers_dir / f"worker-{i}.bin"
         ensure_worker(binary, production, model, args.hidden)
-        jobs.append((i, model, shards[i]))
+        jobs.append((i, model, corpora[i]))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = [
-            pool.submit(train_worker, binary, i, model, shard,
+            pool.submit(train_worker, binary, i, model, corpus,
                         args.epochs, args.seq_len, args.lr)
-            for i, model, shard in jobs
+            for i, model, corpus in jobs
         ]
         for f in futures:
             f.result()
 
-    print("\nIndependent training complete.")
+    print("\nIndependent training complete; no worker weights were merged.")
     print("Production checkpoint was NOT modified.")
-    for i, model, shard in jobs:
-        print(f"worker-{i}: {model} <- {shard}")
+    for i, model, corpus in jobs:
+        print(f"worker-{i}: {model} <- {corpus}")
 
 if __name__ == "__main__":
     main()
