@@ -1,0 +1,25 @@
+{
+  "version": "0.0.2",
+  "topics": [
+    {"id":"python","query":"Python programming language software development","github":"python language:python stars:>500","wiki":["Python (programming language)","Software development"]},
+    {"id":"cpp","query":"C++ programming language systems programming","github":"c++ language:c++ stars:>500","wiki":["C++","Systems programming"]},
+    {"id":"java","query":"Java programming language JVM applications","github":"java language:java stars:>500","wiki":["Java (programming language)","Java virtual machine"]},
+    {"id":"kotlin_android","query":"Kotlin Android application development","github":"android kotlin language:kotlin stars:>300","wiki":["Kotlin (programming language)","Android (operating system)"]},
+    {"id":"javascript","query":"JavaScript TypeScript web applications","github":"javascript language:javascript stars:>500","wiki":["JavaScript","TypeScript","Web application"]},
+    {"id":"rust","query":"Rust programming language systems","github":"rust language:rust stars:>500","wiki":["Rust (programming language)","Memory safety"]},
+    {"id":"go","query":"Go programming language network services","github":"golang language:go stars:>500","wiki":["Go (programming language)","Computer network"]},
+    {"id":"algorithms","query":"algorithms data structures computer science","github":"algorithms data-structures stars:>500","wiki":["Algorithm","Data structure","Computer science"]},
+    {"id":"databases","query":"database SQL PostgreSQL SQLite","github":"database sql stars:>500","wiki":["Database","SQL","PostgreSQL","SQLite"]},
+    {"id":"linux","query":"Linux operating system shell systemd","github":"linux systemd stars:>500","wiki":["Linux","Systemd","Unix shell"]},
+    {"id":"networking","query":"computer networks HTTP TCP IP DNS","github":"networking http tcp stars:>300","wiki":["Internet protocol suite","HTTP","Domain Name System"]},
+    {"id":"mobile_apps","query":"mobile application Android software architecture","github":"android app architecture stars:>300","wiki":["Mobile app","Software architecture","Android software development"]},
+    {"id":"ai_ml","query":"artificial intelligence machine learning neural networks","github":"machine-learning neural-network stars:>500","wiki":["Artificial intelligence","Machine learning","Artificial neural network"]},
+    {"id":"countries_europe","query":"countries Europe geography languages culture","github":"","wiki":["Europe","Netherlands","Germany","France","Italy","Spain","Poland"]},
+    {"id":"countries_asia","query":"countries Asia geography languages culture","github":"","wiki":["Asia","China","Japan","India","South Korea","Indonesia"]},
+    {"id":"countries_americas","query":"countries Americas geography languages culture","github":"","wiki":["Americas","United States","Canada","Brazil","Mexico","Argentina"]},
+    {"id":"russia","query":"Russia geography history languages technology","github":"","wiki":["Russia","Russian language","Geography of Russia","Science and technology in Russia"]},
+    {"id":"world_languages","query":"languages linguistics writing systems world","github":"","wiki":["Language","Linguistics","Writing system","English language","Russian language","Chinese language","Spanish language","Arabic"]},
+    {"id":"software_engineering","query":"software engineering testing git version control","github":"software engineering testing git stars:>300","wiki":["Software engineering","Software testing","Git","Version control"]},
+    {"id":"security_basics","query":"computer security cryptography authentication secure coding","github":"secure coding cryptography stars:>300","wiki":["Computer security","Cryptography","Authentication","Secure coding"]}
+  ]
+}
