@@ -19,7 +19,7 @@ OUT_DIR = Path(os.getenv("REAI_OUTPUT_DIR", ROOT / "outputs")).resolve()
 API_KEY = os.getenv("REAI_API_KEY", "")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
-from policy.engine import check_text, public_error
+from policy.engine import check_text, public_error, control_prefix
 
 def run(*args, timeout=600):
     p = subprocess.run([str(BIN), *map(str, args)], capture_output=True, text=True, timeout=timeout)
@@ -114,23 +114,41 @@ class Handler(BaseHTTPRequestHandler):
 
             if self.path == "/v1/chat/completions":
                 messages = data.get("messages") or []
-                prompt = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in messages)
-                ok, rule = check_text(prompt, "chat")
-                if not ok:
-                    return self.send_json(400, public_error(rule))
+
+                # Security checks are outside the model and cannot be overridden by prompting.
+                for m in messages:
+                    content = str(m.get("content", ""))
+                    ok, rule = check_text(
+                        content,
+                        "chat",
+                        detect_injection=(str(m.get("role", "user")) == "user")
+                    )
+                    if not ok:
+                        return self.send_json(400, public_error(rule))
+
+                user_prompt = "\n".join(
+                    f"{m.get('role','user')}: {m.get('content','')}" for m in messages
+                )
+                prompt = control_prefix() + user_prompt
                 tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
                 text = run("text-generate", TEXT_MODEL, prompt, tokens,
                            data.get("temperature", 0.9), data.get("top_k", 40))
                 generated = text[len(prompt):] if text.startswith(prompt) else text
+                generated = generated.strip()
+
+                ok, rule = check_text(generated, "model_output")
+                if not ok:
+                    generated = "Не могу помочь с этим запросом."
+
                 return self.send_json(200, {
                     "object": "chat.completion",
                     "model": f"reai-{VERSION}",
-                    "choices": [{"index": 0, "message": {"role": "assistant", "content": generated.strip()}}]
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": generated}}]
                 })
 
             if self.path == "/v1/images/generations":
                 prompt = str(data.get("prompt", ""))[:4000]
-                ok, rule = check_text(prompt, "image_generation")
+                ok, rule = check_text(prompt, "image_generation", detect_injection=True)
                 if not ok:
                     return self.send_json(400, public_error(rule))
                 token = os.urandom(8).hex()
