@@ -3,28 +3,44 @@ name: android
 on:
   push:
     paths:
-      - 'android/**'
+      - 'tools/rebrand_miniichat.py'
+      - 'tools/reverfyx-dev-keystore.b64'
       - '.github/workflows/android.yml'
-  pull_request:
-    paths:
-      - 'android/**'
-      - '.github/workflows/android.yml'
+  workflow_dispatch:
 
 jobs:
-  debug-apk:
+  release-apk:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Checkout upstream MiniiChat v1.0.2
+        run: |
+          git clone --depth 1 --branch v1.0.2 https://github.com/Minis233/miniichat.git android-upstream
+
+      - name: Apply ReVerfyx branding and gateway
+        run: |
+          python3 tools/rebrand_miniichat.py android-upstream
+          base64 -d tools/reverfyx-dev-keystore.b64 > android-upstream/app/release.keystore
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
+
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '9.6.0'
-      - name: Build debug APK
-        run: gradle -p android assembleDebug
+          gradle-version: '8.7'
+
+      - name: Build stable signed release APK
+        run: gradle -p android-upstream :app:assembleRelease
+
+      - name: Verify APK exists
+        run: |
+          ls -lh android-upstream/app/build/outputs/apk/release/
+          test -f android-upstream/app/build/outputs/apk/release/app-release.apk
+
       - uses: actions/upload-artifact@v4
         with:
-          name: ReVerfyx-AI-0.0.5-compose-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: ReVerfyx-AI-0.0.6-miniichat
+          path: android-upstream/app/build/outputs/apk/release/app-release.apk
