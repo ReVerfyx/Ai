@@ -153,7 +153,7 @@ EOF
     echo "Logs: bash host.sh logs learn"
     ;;
 
-  upgrade50m|key-new|keys|chat|image|observe|improve|improve-once|improve-log)
+  upgrade50m|key-new|keys|chat|image|observe|improve|improve-auto|improve-once|improve-log)
     require_local
     python3 "$ROOT/tools/manage.py" "$CMD" "$@"
     ;;
@@ -257,6 +257,7 @@ Check real learning progress:
   bash host.sh image "ночные горы"
   bash host.sh observe
   bash host.sh improve
+  bash host.sh improve-auto
   bash host.sh improve-log
 
 Other:
