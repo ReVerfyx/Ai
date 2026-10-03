@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from policy.runtime import check_text, check_generated_text, public_error, wrap_untrusted, control_prefix
 
-VERSION = "0.0.2"
+VERSION = "0.0.5"
 LISTEN_HOST = os.getenv("REAI_GATEWAY_HOST", "0.0.0.0")
 LISTEN_PORT = int(os.getenv("REAI_GATEWAY_PORT", "8090"))
 AI_BASE = os.getenv("REAI_AI_BASE", "http://2.26.85.86:8080").rstrip("/")
@@ -105,16 +105,29 @@ def token_hash(token):
 
 def ai_request(path, payload=None, binary=False):
     data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode()
-    req = Request(AI_BASE + path, data=data)
-    if payload is not None:
-        req.add_header("Content-Type", "application/json; charset=utf-8")
-    if AI_KEY:
-        req.add_header("X-API-Key", AI_KEY)
-    try:
+
+    def perform(send_key):
+        req = Request(AI_BASE + path, data=data)
+        if payload is not None:
+            req.add_header("Content-Type", "application/json; charset=utf-8")
+        if send_key and AI_KEY:
+            req.add_header("X-API-Key", AI_KEY)
         with urlopen(req, timeout=600) as r:
             body = r.read()
             return body if binary else json.loads(body.decode("utf-8"))
+
+    try:
+        return perform(True)
     except HTTPError as e:
+        # A stale gateway key must not break the internal service link.
+        # The backend only accepts this retry when the TCP peer is the
+        # explicitly trusted gateway IP.
+        if e.code == 401 and AI_KEY:
+            try:
+                return perform(False)
+            except HTTPError as retry_error:
+                e = retry_error
+
         body = e.read().decode("utf-8", errors="replace")
         try:
             detail = json.loads(body)
