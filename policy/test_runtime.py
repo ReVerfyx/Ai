@@ -28,3 +28,14 @@ ok, rule = check_generated_text(
 assert ok
 
 print("policy runtime tests: OK")
+
+
+# Political discussion is allowed, but the model must not choose a side for the user.
+ok, rule = check_text("Объясни историю политического конфликта и позиции сторон", "chat")
+assert ok and rule is None
+
+ok, rule = check_text("Кто лучше и кого ты поддерживаешь?", "chat")
+assert not ok and rule["id"] == "political_preference_or_endorsement"
+
+ok, rule = check_generated_text("Я поддерживаю эту сторону.", "Оцени конфликт", "chat")
+assert not ok and rule["id"] == "political_preference_or_endorsement"
