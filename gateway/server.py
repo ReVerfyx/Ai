@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from policy.engine import check_text, public_error, wrap_untrusted, control_prefix
+from policy.runtime import check_text, check_generated_text, public_error, wrap_untrusted, control_prefix
 
 VERSION = "0.0.2"
 LISTEN_HOST = os.getenv("REAI_GATEWAY_HOST", "0.0.0.0")
@@ -373,7 +373,7 @@ class Handler(BaseHTTPRequestHandler):
                     "top_k": int(data.get("top_k",40))
                 })
                 answer = result["choices"][0]["message"]["content"]
-                ok, rule = check_text(answer, "model_output")
+                ok, rule = check_generated_text(answer, full_user_content, "chat")
                 if not ok:
                     answer = "Не могу помочь с этим запросом."
                 with db() as c:
