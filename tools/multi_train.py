@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Independent parallel trainers for ReVerfyx AI 0.0.2.
+"""Independent trainers for ReVerfyx AI.
 
-Each worker has its own checkpoint. No averaging, merging or automatic promotion.
-With --corpus-dir, worker N trains only from worker-N.txt.
+Supports the legacy dense text engine and the sparse ~50.7M parameter engine.
+Sparse workers remain independent but are trained sequentially on small VPSs so
+the API can stay responsive while training is in progress.
 """
 import argparse
 import os
 import shutil
-import time
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -31,29 +31,41 @@ def split_corpus(corpus: Path, out_dir: Path, workers: int):
         paths.append(p)
     return paths
 
-def ensure_worker(binary: Path, production: Path, worker_model: Path, hidden: int):
+def ensure_worker(binary: Path, production: Path, worker_model: Path,
+                  hidden: int, engine: str, seed: int):
     worker_model.parent.mkdir(parents=True, exist_ok=True)
     if worker_model.exists():
         return
-    if production.exists():
+    if engine == "sparse":
+        subprocess.check_call([
+            str(binary), "sparse-init", str(worker_model),
+            "256", "192", "512", str(seed)
+        ])
+    elif production.exists():
         shutil.copy2(production, worker_model)
     else:
         subprocess.check_call([str(binary), "text-init", str(worker_model), str(hidden)])
 
 def train_worker(binary: Path, worker_id: int, model: Path, corpus: Path,
-                 epochs: int, seq_len: int, lr: float):
+                 epochs: int, seq_len: int, lr: float, engine: str):
     if not corpus.exists() or corpus.stat().st_size <= seq_len + 2:
-        print(f"[worker {worker_id}] skipped: corpus missing/too small: {corpus}")
+        print(f"[worker {worker_id}] skipped: corpus missing/too small: {corpus}", flush=True)
         return
     env = os.environ.copy()
     env["OMP_NUM_THREADS"] = "1"
     env["OPENBLAS_NUM_THREADS"] = "1"
-    print(f"[worker {worker_id}] independent checkpoint={model} corpus={corpus}")
+
+    print(
+        f"[worker {worker_id}] engine={engine} independent checkpoint={model} corpus={corpus}",
+        flush=True
+    )
+
     training = model.with_suffix(model.suffix + f".training-{os.getpid()}-{worker_id}")
     shutil.copy2(model, training)
     try:
+        cmd = "sparse-train" if engine == "sparse" else "text-train"
         subprocess.check_call([
-            str(binary), "text-train", str(training), str(corpus),
+            str(binary), cmd, str(training), str(corpus),
             str(epochs), str(seq_len), str(lr)
         ], env=env)
         backup = model.with_suffix(model.suffix + ".previous")
@@ -67,7 +79,8 @@ def main():
     ap.add_argument("--production-model", default="models/text.bin")
     ap.add_argument("--workers-dir", default="models/workers")
     ap.add_argument("--corpus", default="data/corpus.txt")
-    ap.add_argument("--corpus-dir", default="", help="directory containing worker-N.txt; keeps training data independent")
+    ap.add_argument("--corpus-dir", default="",
+                    help="directory containing worker-N.txt")
     ap.add_argument("--shards-dir", default="data/worker-shards")
     ap.add_argument("--bin", default="build/reai")
     ap.add_argument("--workers", type=int, default=min(2, os.cpu_count() or 1))
@@ -75,6 +88,11 @@ def main():
     ap.add_argument("--seq-len", type=int, default=64)
     ap.add_argument("--lr", type=float, default=0.0005)
     ap.add_argument("--hidden", type=int, default=128)
+    ap.add_argument(
+        "--engine",
+        choices=["text", "sparse"],
+        default=os.getenv("REAI_TRAIN_ENGINE", "text")
+    )
     args = ap.parse_args()
 
     root = Path(__file__).resolve().parents[1]
@@ -93,20 +111,35 @@ def main():
     jobs = []
     for i in range(workers):
         model = workers_dir / f"worker-{i}.bin"
-        ensure_worker(binary, production, model, args.hidden)
+        ensure_worker(
+            binary, production, model, args.hidden,
+            args.engine, 1337 + i * 7919
+        )
         jobs.append((i, model, corpora[i]))
 
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = [
-            pool.submit(train_worker, binary, i, model, corpus,
-                        args.epochs, args.seq_len, args.lr)
-            for i, model, corpus in jobs
-        ]
-        for f in futures:
-            f.result()
+    if args.engine == "sparse":
+        # Independent checkpoints, sequential compute. This is deliberate:
+        # two simultaneous 50M trainers on 2 vCPU would make both much slower
+        # and would starve the API.
+        for i, model, corpus in jobs:
+            train_worker(
+                binary, i, model, corpus,
+                args.epochs, min(args.seq_len, 48), args.lr, args.engine
+            )
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = [
+                pool.submit(
+                    train_worker, binary, i, model, corpus,
+                    args.epochs, args.seq_len, args.lr, args.engine
+                )
+                for i, model, corpus in jobs
+            ]
+            for f in futures:
+                f.result()
 
     print("\nIndependent training complete; no worker weights were merged.")
-    print("Production checkpoint was NOT modified.")
+    print("Production checkpoint was NOT modified during an active training pass.")
     for i, model, corpus in jobs:
         print(f"worker-{i}: {model} <- {corpus}")
 
