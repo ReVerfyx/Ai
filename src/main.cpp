@@ -1,5 +1,6 @@
 #include "image_model.hpp"
 #include "text_model.hpp"
+#include "sparse_text_model.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -14,6 +15,10 @@ Commands:
   reai text-init <model.bin> [hidden]
   reai text-train <model.bin> <corpus.txt> [epochs] [seq_len] [lr]
   reai text-generate <model.bin> <prompt> [tokens] [temperature] [top_k]
+  reai sparse-init <model.bin> [dim=256] [experts=192] [ff=512] [seed]
+  reai sparse-train <model.bin> <corpus.txt> [epochs] [seq_len] [lr]
+  reai sparse-generate <model.bin> <prompt> [tokens] [temperature] [top_k]
+  reai sparse-info <model.bin>
   reai image-init <model.bin> [size] [hidden]
   reai image-train <model.bin> <manifest.tsv> [epochs] [lr]
   reai image-generate <model.bin> <prompt> <out.ppm> [steps]
@@ -48,6 +53,39 @@ int main(int argc, char** argv) {
             const float temp = argc > 5 ? std::stof(argv[5]) : 0.9f;
             const int topk = argc > 6 ? std::stoi(argv[6]) : 40;
             std::cout << model.generate(argv[3], tokens, temp, topk, static_cast<uint32_t>(std::random_device{}())) << "\n";
+        } else if (cmd == "sparse-init") {
+            if (argc < 3) throw std::runtime_error("sparse-init needs model path");
+            const uint32_t dim = argc > 3 ? static_cast<uint32_t>(std::stoul(argv[3])) : 256;
+            const uint32_t experts = argc > 4 ? static_cast<uint32_t>(std::stoul(argv[4])) : 192;
+            const uint32_t ff = argc > 5 ? static_cast<uint32_t>(std::stoul(argv[5])) : 512;
+            const uint32_t seed = argc > 6 ? static_cast<uint32_t>(std::stoul(argv[6])) : 1337;
+            SparseTextModel model(dim, experts, ff, seed);
+            model.save(argv[2]);
+            std::cout << "created sparse text model: " << argv[2]
+                      << " params=" << model.parameter_count() << "\n";
+        } else if (cmd == "sparse-train") {
+            if (argc < 4) throw std::runtime_error("sparse-train needs model and corpus");
+            auto model = SparseTextModel::load(argv[2]);
+            const int epochs = argc > 4 ? std::stoi(argv[4]) : 1;
+            const int seq = argc > 5 ? std::stoi(argv[5]) : 48;
+            const float lr = argc > 6 ? std::stof(argv[6]) : 0.0003f;
+            model.train_file(argv[3], epochs, seq, lr, argv[2]);
+        } else if (cmd == "sparse-generate") {
+            if (argc < 4) throw std::runtime_error("sparse-generate needs model and prompt");
+            auto model = SparseTextModel::load(argv[2]);
+            const int tokens = argc > 4 ? std::stoi(argv[4]) : 200;
+            const float temp = argc > 5 ? std::stof(argv[5]) : 0.9f;
+            const int topk = argc > 6 ? std::stoi(argv[6]) : 40;
+            std::cout << model.generate(argv[3], tokens, temp, topk,
+                                        static_cast<uint32_t>(std::random_device{}())) << "\n";
+        } else if (cmd == "sparse-info") {
+            if (argc < 3) throw std::runtime_error("sparse-info needs model path");
+            auto model = SparseTextModel::load(argv[2]);
+            std::cout << "engine=sparse-moe"
+                      << " params=" << model.parameter_count()
+                      << " dim=" << model.dim()
+                      << " experts=" << model.experts()
+                      << " ff=" << model.ff() << "\n";
         } else if (cmd == "image-init") {
             if (argc < 3) throw std::runtime_error("image-init needs model path");
             const uint32_t sz = argc > 3 ? static_cast<uint32_t>(std::stoul(argv[3])) : 32;
