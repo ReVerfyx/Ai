@@ -29,3 +29,8 @@ jobs:
           PY
           ./build/reai image-train /tmp/image.bin /tmp/images.tsv 1 0.001
           ./build/reai image-generate /tmp/image.bin 'a red square' /tmp/out.ppm 4
+
+      - name: Python syntax
+        run: |
+          python3 -m py_compile api/server.py gateway/server.py policy/engine.py
+          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py
