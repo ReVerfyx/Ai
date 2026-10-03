@@ -1,0 +1,16 @@
+[Unit]
+Description=ReVerfyx AI 0.0.2 continuous trainer
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/reai
+Environment=REAI_TRAIN_ARGS=--workers 2 --cycles 0 --pages 40 --epochs 1
+ExecStart=/bin/bash -lc 'exec /usr/bin/python3 /opt/reai/tools/self_learn.py $REAI_TRAIN_ARGS'
+Restart=on-failure
+RestartSec=10
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
