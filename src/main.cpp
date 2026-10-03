@@ -1,0 +1,77 @@
+#include "image_model.hpp"
+#include "text_model.hpp"
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
+using namespace reai;
+
+static void help() {
+    std::cout <<
+R"(ReVerfyx AI - from-scratch CPU research core
+
+Commands:
+  reai text-init <model.bin> [hidden]
+  reai text-train <model.bin> <corpus.txt> [epochs] [seq_len] [lr]
+  reai text-generate <model.bin> <prompt> [tokens] [temperature] [top_k]
+  reai image-init <model.bin> [size] [hidden]
+  reai image-train <model.bin> <manifest.tsv> [epochs] [lr]
+  reai image-generate <model.bin> <prompt> <out.ppm> [steps]
+
+Image manifest format:
+  relative/or/absolute/image.ppm<TAB>caption
+
+No pretrained model or third-party ML runtime is used.
+)";
+}
+
+int main(int argc, char** argv) {
+    try {
+        if (argc < 2) { help(); return 0; }
+        const std::string cmd = argv[1];
+        if (cmd == "text-init") {
+            if (argc < 3) throw std::runtime_error("text-init needs model path");
+            const uint32_t h = argc > 3 ? static_cast<uint32_t>(std::stoul(argv[3])) : 128;
+            TextModel(h).save(argv[2]);
+            std::cout << "created random text model: " << argv[2] << "\n";
+        } else if (cmd == "text-train") {
+            if (argc < 4) throw std::runtime_error("text-train needs model and corpus");
+            auto model = TextModel::load(argv[2]);
+            const int epochs = argc > 4 ? std::stoi(argv[4]) : 1;
+            const int seq = argc > 5 ? std::stoi(argv[5]) : 64;
+            const float lr = argc > 6 ? std::stof(argv[6]) : 0.001f;
+            model.train_file(argv[3], epochs, seq, lr, argv[2]);
+        } else if (cmd == "text-generate") {
+            if (argc < 4) throw std::runtime_error("text-generate needs model and prompt");
+            auto model = TextModel::load(argv[2]);
+            const int tokens = argc > 4 ? std::stoi(argv[4]) : 200;
+            const float temp = argc > 5 ? std::stof(argv[5]) : 0.9f;
+            const int topk = argc > 6 ? std::stoi(argv[6]) : 40;
+            std::cout << model.generate(argv[3], tokens, temp, topk, static_cast<uint32_t>(std::random_device{}())) << "\n";
+        } else if (cmd == "image-init") {
+            if (argc < 3) throw std::runtime_error("image-init needs model path");
+            const uint32_t sz = argc > 3 ? static_cast<uint32_t>(std::stoul(argv[3])) : 32;
+            const uint32_t h = argc > 4 ? static_cast<uint32_t>(std::stoul(argv[4])) : 256;
+            ImageModel(sz, sz, h).save(argv[2]);
+            std::cout << "created random image model: " << argv[2] << "\n";
+        } else if (cmd == "image-train") {
+            if (argc < 4) throw std::runtime_error("image-train needs model and manifest");
+            auto model = ImageModel::load(argv[2]);
+            const int epochs = argc > 4 ? std::stoi(argv[4]) : 1;
+            const float lr = argc > 5 ? std::stof(argv[5]) : 0.0005f;
+            model.train_manifest(argv[3], epochs, lr, argv[2]);
+        } else if (cmd == "image-generate") {
+            if (argc < 5) throw std::runtime_error("image-generate needs model, prompt and output");
+            auto model = ImageModel::load(argv[2]);
+            const int steps = argc > 5 ? std::stoi(argv[5]) : 24;
+            model.generate(argv[3], argv[4], steps, static_cast<uint32_t>(std::random_device{}()));
+            std::cout << "saved " << argv[4] << "\n";
+        } else {
+            help(); return 1;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "error: " << e.what() << "\n";
+        return 2;
+    }
+    return 0;
+}
