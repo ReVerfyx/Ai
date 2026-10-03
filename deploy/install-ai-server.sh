@@ -29,13 +29,23 @@ REAI_PORT=8080
 REAI_API_KEY=$KEY
 REAI_TEXT_MODEL=$ROOT/models/workers/worker-0.bin
 REAI_IMAGE_MODEL=$ROOT/models/image.bin
+REAI_API_KEYS_FILE=/etc/reai-api-keys.json
 EOF
   sudo chmod 600 /etc/reai-ai.env
 fi
 
+if ! sudo grep -q '^REAI_API_KEYS_FILE=' /etc/reai-ai.env; then
+  echo 'REAI_API_KEYS_FILE=/etc/reai-api-keys.json' | sudo tee -a /etc/reai-ai.env >/dev/null
+fi
+
+if [[ ! -f /etc/reai-api-keys.json ]]; then
+  echo '{"keys":[]}' | sudo tee /etc/reai-api-keys.json >/dev/null
+  sudo chmod 600 /etc/reai-api-keys.json
+fi
+
 sudo tee /etc/systemd/system/reai.service >/dev/null <<EOF
 [Unit]
-Description=ReVerfyx AI 0.0.2 core API
+Description=ReVerfyx AI 0.0.3 core API
 After=network-online.target
 Wants=network-online.target
 
