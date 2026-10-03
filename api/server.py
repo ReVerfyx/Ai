@@ -4,6 +4,7 @@ import json
 import os
 import struct
 import subprocess
+import sys
 import zlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,6 +18,8 @@ IMAGE_MODEL = Path(os.getenv("REAI_IMAGE_MODEL", ROOT / "models" / "image.bin"))
 OUT_DIR = Path(os.getenv("REAI_OUTPUT_DIR", ROOT / "outputs")).resolve()
 API_KEY = os.getenv("REAI_API_KEY", "")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
+sys.path.insert(0, str(ROOT))
+from policy.engine import check_text, public_error
 
 def run(*args, timeout=600):
     p = subprocess.run([str(BIN), *map(str, args)], capture_output=True, text=True, timeout=timeout)
@@ -112,6 +115,9 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/v1/chat/completions":
                 messages = data.get("messages") or []
                 prompt = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in messages)
+                ok, rule = check_text(prompt, "chat")
+                if not ok:
+                    return self.send_json(400, public_error(rule))
                 tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
                 text = run("text-generate", TEXT_MODEL, prompt, tokens,
                            data.get("temperature", 0.9), data.get("top_k", 40))
@@ -124,6 +130,9 @@ class Handler(BaseHTTPRequestHandler):
 
             if self.path == "/v1/images/generations":
                 prompt = str(data.get("prompt", ""))[:4000]
+                ok, rule = check_text(prompt, "image_generation")
+                if not ok:
+                    return self.send_json(400, public_error(rule))
                 token = os.urandom(8).hex()
                 ppm = OUT_DIR / f"img-{token}.ppm"
                 png = OUT_DIR / f"img-{token}.png"
