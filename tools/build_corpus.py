@@ -6,7 +6,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from policy.engine import check_text, sanitize_untrusted
+from policy.runtime import check_text, sanitize_untrusted
 
 ap = argparse.ArgumentParser()
 ap.add_argument("inputs", nargs="+")
