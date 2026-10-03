@@ -1,0 +1,17 @@
+[Unit]
+Description=ReVerfyx AI application gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/reai
+EnvironmentFile=/etc/reai-gateway.env
+ExecStart=/usr/bin/python3 /opt/reai/gateway/server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
