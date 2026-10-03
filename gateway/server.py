@@ -338,6 +338,10 @@ class Handler(BaseHTTPRequestHandler):
                         else:
                             extra.append(f"\n\n[ATTACHMENT {r['name']}: stored, binary analysis is not available in 0.0.2]")
 
+                attachment_names = [r["name"] for r in rows] if file_ids else []
+                visible_user_content = content
+                if attachment_names:
+                    visible_user_content += ("\n" if visible_user_content else "") + "📎 " + ", ".join(attachment_names)
                 full_user_content = content + "".join(extra)
                 ok, rule = check_text(full_user_content, "chat")
                 if not ok:
@@ -345,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
 
                 with db() as c:
                     c.execute("INSERT INTO messages(chat_id,role,content,created_at) VALUES(?,?,?,?)",
-                              (cid,"user",content,now()))
+                              (cid,"user",visible_user_content,now()))
                     if chat["title"] == "Новый чат" and content:
                         c.execute("UPDATE chats SET title=?,updated_at=? WHERE id=?",
                                   (chat_title(content),now(),cid))
@@ -410,10 +414,18 @@ class Handler(BaseHTTPRequestHandler):
                 media_id = uuid.uuid4().hex
                 path = MEDIA_DIR / f"{media_id}.png"
                 path.write_bytes(raw)
+                media_url = f"/v1/media/{media_id}"
                 with db() as c:
                     c.execute("INSERT INTO media(id,user_id,path,mime,created_at) VALUES(?,?,?,?,?)",
                               (media_id,user["id"],str(path),"image/png",now()))
-                return self.json(200, {"created":True,"data":[{"url":f"/v1/media/{media_id}","format":"png"}]})
+                    cid = str(data.get("chat_id","")).strip()
+                    if cid and self.owned_chat(user["id"], cid):
+                        c.execute("INSERT INTO messages(chat_id,role,content,created_at) VALUES(?,?,?,?)",
+                                  (cid,"user","Создай изображение: " + prompt,now()))
+                        c.execute("INSERT INTO messages(chat_id,role,content,created_at) VALUES(?,?,?,?)",
+                                  (cid,"assistant","[image:" + media_url + "]",now()))
+                        c.execute("UPDATE chats SET updated_at=? WHERE id=?", (now(),cid))
+                return self.json(200, {"created":True,"data":[{"url":media_url,"format":"png"}]})
 
             return self.json(404, {"error":"not_found"})
         except ValueError as e:
