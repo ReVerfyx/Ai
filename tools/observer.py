@@ -5,6 +5,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PORT = int(os.getenv("REAI_OBSERVER_PORT", "8765"))
+HOST = os.getenv("REAI_OBSERVER_HOST", "127.0.0.1")
+TOKEN = os.getenv("REAI_OBSERVER_TOKEN", "")
 
 def service(name):
     try:
@@ -71,9 +73,21 @@ def newest_sources():
 
 class H(BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path not in ("/","/index.html"):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(self.path)
+        if parsed.path not in ("/","/index.html"):
             self.send_error(404)
             return
+        if TOKEN:
+            supplied = parse_qs(parsed.query).get("token", [""])[0]
+            if supplied != TOKEN:
+                raw=b"Unauthorized"
+                self.send_response(401)
+                self.send_header("Content-Type","text/plain; charset=utf-8")
+                self.send_header("Content-Length",str(len(raw)))
+                self.end_headers()
+                self.wfile.write(raw)
+                return
         st=research()
         body=["""<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="refresh" content="5">
@@ -110,5 +124,6 @@ pre{white-space:pre-wrap;max-height:360px;overflow:auto;background:#0c0e12;paddi
         pass
 
 if __name__=="__main__":
-    print(f"observer http://127.0.0.1:{PORT}",flush=True)
-    ThreadingHTTPServer(("127.0.0.1",PORT),H).serve_forever()
+    shown = HOST if HOST != "0.0.0.0" else "SERVER_IP"
+    print(f"observer http://{shown}:{PORT}",flush=True)
+    ThreadingHTTPServer((HOST,PORT),H).serve_forever()
