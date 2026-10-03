@@ -23,7 +23,7 @@ from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from policy.engine import check_text, public_error
+from policy.engine import check_text, public_error, wrap_untrusted, control_prefix
 
 VERSION = "0.0.2"
 LISTEN_HOST = os.getenv("REAI_GATEWAY_HOST", "0.0.0.0")
@@ -334,7 +334,7 @@ class Handler(BaseHTTPRequestHandler):
                             ok, rule = check_text(txt, "file_analysis")
                             if not ok:
                                 return self.json(400, public_error(rule))
-                            extra.append(f"\n\n[FILE {r['name']}]\n{txt}\n[/FILE]")
+                            extra.append(wrap_untrusted(txt, f"file {r['name']}"))
                         else:
                             extra.append(f"\n\n[ATTACHMENT {r['name']}: stored, binary analysis is not available in 0.0.2]")
 
@@ -343,6 +343,9 @@ class Handler(BaseHTTPRequestHandler):
                 if attachment_names:
                     visible_user_content += ("\n" if visible_user_content else "") + "📎 " + ", ".join(attachment_names)
                 full_user_content = content + "".join(extra)
+                ok, rule = check_text(content, "chat", detect_injection=True)
+                if not ok:
+                    return self.json(400, public_error(rule))
                 ok, rule = check_text(full_user_content, "chat")
                 if not ok:
                     return self.json(400, public_error(rule))
@@ -362,6 +365,7 @@ class Handler(BaseHTTPRequestHandler):
                 messages = [dict(r) for r in reversed(history)]
                 if extra:
                     messages[-1]["content"] = full_user_content
+                messages.insert(0, {"role":"system","content":control_prefix()})
                 result = ai_request("/v1/chat/completions", {
                     "messages": messages,
                     "max_tokens": max(1,min(int(data.get("max_tokens",512)),4096)),
@@ -369,6 +373,9 @@ class Handler(BaseHTTPRequestHandler):
                     "top_k": int(data.get("top_k",40))
                 })
                 answer = result["choices"][0]["message"]["content"]
+                ok, rule = check_text(answer, "model_output")
+                if not ok:
+                    answer = "Не могу помочь с этим запросом."
                 with db() as c:
                     cur = c.execute("INSERT INTO messages(chat_id,role,content,created_at) VALUES(?,?,?,?)",
                                     (cid,"assistant",answer,now()))
@@ -402,7 +409,7 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/v1/images/generations":
                 data = self.body_json()
                 prompt = str(data.get("prompt","")).strip()
-                ok, rule = check_text(prompt, "image_generation")
+                ok, rule = check_text(prompt, "image_generation", detect_injection=True)
                 if not ok:
                     return self.json(400, public_error(rule))
                 result = ai_request("/v1/images/generations", {
