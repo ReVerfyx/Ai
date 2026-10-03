@@ -323,7 +323,10 @@ SparseTextModel SparseTextModel::load(const std::string& path) {
     const uint32_t experts = read_u32(in);
     const uint32_t ff = read_u32(in);
 
-    SparseTextModel m(dim, experts, ff, 1);
+    SparseTextModel m;
+    m.dim_ = dim;
+    m.experts_ = experts;
+    m.ff_ = ff;
     m.emb_ = read_vec(in);
     m.whh_ = read_vec(in);
     m.bh_ = read_vec(in);
