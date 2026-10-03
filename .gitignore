@@ -7,3 +7,8 @@ data/images.tsv
 *.bin
 *.ppm
 __pycache__/
+data/gateway.sqlite3*
+data/gateway-files/
+data/gateway-media/
+data/worker-corpus/
+data/worker-shards/
