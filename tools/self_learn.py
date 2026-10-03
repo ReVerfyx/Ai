@@ -26,12 +26,25 @@ cycle = 0
 
 def crawl_for_worker(worker_id: int, seed: str):
     target = root / "data" / "web" / f"worker-{worker_id}"
-    cmd = [
-        "python3", str(root / "tools/crawl.py"), seed,
-        "--out", str(target), "--pages", str(a.pages), "--delay", "1.0"
-    ]
-    if a.same_host:
-        cmd.append("--same-host")
+    target.mkdir(parents=True, exist_ok=True)
+
+    if "wikipedia.org" in seed:
+        cmd = [
+            "python3", str(root / "tools/wiki_fetch.py"), seed,
+            "--out", str(target),
+            "--pages", str(a.pages),
+            "--delay", "0.4"
+        ]
+    else:
+        cmd = [
+            "python3", str(root / "tools/crawl.py"), seed,
+            "--out", str(target),
+            "--pages", str(a.pages),
+            "--delay", "1.0"
+        ]
+        if a.same_host:
+            cmd.append("--same-host")
+
     subprocess.check_call(cmd)
 
 def prune_web_cache():
@@ -63,6 +76,7 @@ def build_worker_corpus(worker_id: int):
         "python3", str(root / "tools/build_corpus.py"), str(source),
         "--out", str(out)
     ])
+    return out
 
 while True:
     cycle += 1
@@ -79,10 +93,21 @@ while True:
 
     prune_web_cache()
 
+    corpora = []
     with ThreadPoolExecutor(max_workers=a.workers) as pool:
         futures = [pool.submit(build_worker_corpus, i) for i in range(a.workers)]
         for f in futures:
-            f.result()
+            corpora.append(f.result())
+
+    usable = [p for p in corpora if p.exists() and p.stat().st_size > 128]
+    if not usable:
+        print("[learn] no usable corpus yet; waiting 60 seconds before retry", flush=True)
+        if a.cycles > 0 and cycle >= a.cycles:
+            break
+        if a.hours > 0 and (time.time() - started) >= a.hours * 3600:
+            break
+        time.sleep(max(60.0, a.pause))
+        continue
 
     subprocess.check_call([
         "python3", str(root / "tools/multi_train.py"),
@@ -96,6 +121,6 @@ while True:
         break
     if a.hours > 0 and (time.time() - started) >= a.hours * 3600:
         break
-    time.sleep(max(0.0, a.pause))
+    time.sleep(max(15.0, a.pause))
 
 print("self-learning finished")
