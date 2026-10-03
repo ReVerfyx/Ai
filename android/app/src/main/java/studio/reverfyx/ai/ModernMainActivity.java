@@ -110,8 +110,80 @@ public class ModernMainActivity extends Activity {
         username = prefs.getString("username", "");
         currentMode = prefs.getString("mode", "Instant");
 
-        if (token.isEmpty()) showAuth();
-        else showApp();
+        try {
+            if (token.isEmpty()) showAuth();
+            else showApp();
+        } catch (Throwable t) {
+            showStartupRecovery(t);
+        }
+    }
+
+
+    private void showStartupRecovery(Throwable error) {
+        try {
+            prefs.edit()
+                    .putString("last_startup_error", error.getClass().getName() + ": " + String.valueOf(error.getMessage()))
+                    .apply();
+
+            token = "";
+            username = "";
+            prefs.edit().remove("token").remove("username").apply();
+
+            LinearLayout root = new LinearLayout(this);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setGravity(Gravity.CENTER_HORIZONTAL);
+            root.setPadding(dp(24), dp(72), dp(24), dp(24));
+            root.setBackgroundColor(Color.WHITE);
+
+            TextView mark = tv("R", 23, Color.WHITE, true);
+            mark.setGravity(Gravity.CENTER);
+            mark.setBackground(round(BLACK, 24));
+            root.addView(mark, new LinearLayout.LayoutParams(dp(48), dp(48)));
+
+            TextView title = tv("ReVerfyx AI", 27, BLACK, true);
+            title.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(-1, dp(58));
+            tlp.topMargin = dp(12);
+            root.addView(title, tlp);
+
+            TextView info = tv("Интерфейс восстановлен после сбоя.\nНажми ниже, чтобы открыть безопасный вход.", 15, MUTED, false);
+            info.setGravity(Gravity.CENTER);
+            info.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(-1, -2);
+            ilp.topMargin = dp(10);
+            root.addView(info, ilp);
+
+            TextView retry = tv("Открыть приложение", 16, Color.WHITE, true);
+            retry.setGravity(Gravity.CENTER);
+            retry.setBackground(round(BLACK, 28));
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(-1, dp(56));
+            rlp.topMargin = dp(26);
+            root.addView(retry, rlp);
+
+            TextView details = tv("Диагностика: " + error.getClass().getSimpleName(), 12, MUTED, false);
+            details.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams dlp = new LinearLayout.LayoutParams(-1, dp(44));
+            dlp.topMargin = dp(10);
+            root.addView(details, dlp);
+
+            retry.setOnClickListener(v -> {
+                try {
+                    showAuth();
+                } catch (Throwable ignored) {
+                    Toast.makeText(this, "Не удалось открыть экран входа", Toast.LENGTH_LONG).show();
+                }
+            });
+
+            setContentView(root);
+        } catch (Throwable ignored) {
+            TextView fallback = new TextView(this);
+            fallback.setText("ReVerfyx AI\nОшибка запуска интерфейса");
+            fallback.setGravity(Gravity.CENTER);
+            fallback.setTextSize(20);
+            fallback.setBackgroundColor(Color.WHITE);
+            fallback.setTextColor(Color.BLACK);
+            setContentView(fallback);
+        }
     }
 
     @Override
@@ -335,7 +407,7 @@ public class ModernMainActivity extends Activity {
         messages = new LinearLayout(this);
         messages.setOrientation(LinearLayout.VERTICAL);
         messages.setPadding(dp(16), dp(6), dp(16), dp(12));
-        messagesScroll.addView(messages, new ScrollView.LayoutParams(-1, -2));
+        messagesScroll.addView(messages, new FrameLayout.LayoutParams(-1, -2));
 
         page.addView(messagesScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
@@ -529,7 +601,7 @@ public class ModernMainActivity extends Activity {
         quick.addView(codex, quickLp());
         quick.addView(apps, quickLp());
 
-        quickScroll.addView(quick, new HorizontalScrollView.LayoutParams(-2, dp(48)));
+        quickScroll.addView(quick, new FrameLayout.LayoutParams(-2, dp(48)));
         drawer.addView(quickScroll, new LinearLayout.LayoutParams(-1, dp(50)));
 
         LinearLayout newChat = actionRow(LineIconView.EDIT, "Новый чат", null);
@@ -543,7 +615,7 @@ public class ModernMainActivity extends Activity {
         ScrollView chatScroll = new ScrollView(this);
         drawerChats = new LinearLayout(this);
         drawerChats.setOrientation(LinearLayout.VERTICAL);
-        chatScroll.addView(drawerChats, new ScrollView.LayoutParams(-1, -2));
+        chatScroll.addView(drawerChats, new FrameLayout.LayoutParams(-1, -2));
         drawer.addView(chatScroll, new LinearLayout.LayoutParams(-1, 0, 1f));
 
         LinearLayout profile = new LinearLayout(this);
@@ -688,7 +760,7 @@ public class ModernMainActivity extends Activity {
         suggestions.addView(s2, suggestionLp());
         suggestions.addView(s3, suggestionLp());
 
-        suggestionsScroll.addView(suggestions, new HorizontalScrollView.LayoutParams(-2, dp(44)));
+        suggestionsScroll.addView(suggestions, new FrameLayout.LayoutParams(-2, dp(44)));
         center.addView(suggestionsScroll, new LinearLayout.LayoutParams(-1, dp(48)));
 
         messages.addView(center, new LinearLayout.LayoutParams(-1, dp(360)));
