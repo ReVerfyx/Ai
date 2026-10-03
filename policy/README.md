@@ -1,49 +1,27 @@
-# Restrictions and prompt-injection defense
+# Restrictions and prompt-injection protection
 
-Machine-readable policy:
+The machine-readable restriction list is:
 
 `policy/restrictions.json`
 
-Runtime enforcement:
+The low-level immutable guard is:
 
 `policy/engine.py`
 
-## Immutable rule
+The runtime semantics are:
 
-The prohibition on sexual content involving minors is enforced directly in
-`policy/engine.py` before the JSON policy is loaded. The JSON entry is there
-for visibility and documentation, but disabling or deleting that JSON entry
-does not disable the runtime prohibition.
+`policy/runtime.py`
 
-The guard normalizes Unicode, spacing/punctuation, common leetspeak, and mixed
-Latin/Cyrillic confusables before checking the request.
+Current 0.0.2 behavior:
 
-It is applied to:
+- adult-only sexual / vulgar dialogue is not blocked by this policy layer;
+- factual, historical, legal, journalistic, or analytical discussion is allowed,
+  including discussion of Jeffrey Epstein and related investigations/cases;
+- the hard minor-safety rule remains non-overridable;
+- attempts to override/reveal system instructions are blocked;
+- instructions found inside uploaded files or webpages are treated as untrusted
+  data and are neutralized before model context;
+- generated text is checked again after inference.
 
-- chat input;
-- image-generation prompts;
-- text/code attachments;
-- training ingestion;
-- generated model text before it is returned to the client.
-
-## Prompt injection
-
-Prompt-injection defense is layered:
-
-1. user requests that try to override, reveal, or disable system/safety rules
-   are rejected before the model is called;
-2. files and crawled web text are treated as untrusted data;
-3. obvious control instructions inside untrusted text are neutralized;
-4. an internal control prefix tells the model that untrusted blocks are data,
-   not instructions;
-5. gateway and AI-core both enforce policy independently;
-6. model output is checked again before it reaches the user;
-7. API keys and credentials are never inserted into the model prompt.
-
-Regression tests live in:
-
-`policy/test_policy.py`
-
-This is defense in depth. No text classifier can mathematically guarantee
-detection of every possible future obfuscation, which is why the most important
-safety rule is enforced outside the model at multiple independent boundaries.
+The hard rule is enforced in code before configurable rules, so changing
+`restrictions.json` cannot turn it off.
