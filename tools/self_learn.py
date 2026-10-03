@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Continuous independent self-learning loop for ReVerfyx AI 0.0.2."""
+"""Continuous, fully independent self-learning for ReVerfyx AI 0.0.2."""
 import argparse
 import os
 import subprocess
@@ -33,12 +33,21 @@ def crawl_for_worker(worker_id: int, seed: str):
         cmd.append("--same-host")
     subprocess.check_call(cmd)
 
+def build_worker_corpus(worker_id: int):
+    source = root / "data" / "web" / f"worker-{worker_id}"
+    source.mkdir(parents=True, exist_ok=True)
+    out = root / "data" / "worker-corpus" / f"worker-{worker_id}.txt"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.check_call([
+        "python3", str(root / "tools/build_corpus.py"), str(source),
+        "--out", str(out)
+    ])
+
 while True:
     cycle += 1
     print(f"\n=== ReAI independent learning cycle {cycle} ===")
 
     if a.seed:
-        # Seeds are distributed round-robin. Each crawl target belongs to one worker.
         with ThreadPoolExecutor(max_workers=min(a.workers, len(a.seed))) as pool:
             futures = [
                 pool.submit(crawl_for_worker, i % a.workers, seed)
@@ -47,18 +56,17 @@ while True:
             for f in futures:
                 f.result()
 
-    web = root / "data" / "web"
-    web.mkdir(parents=True, exist_ok=True)
-    subprocess.check_call([
-        "python3", str(root / "tools/build_corpus.py"), str(web),
-        "--out", str(root / "data/corpus.txt")
-    ])
+    with ThreadPoolExecutor(max_workers=a.workers) as pool:
+        futures = [pool.submit(build_worker_corpus, i) for i in range(a.workers)]
+        for f in futures:
+            f.result()
 
     subprocess.check_call([
         "python3", str(root / "tools/multi_train.py"),
         "--workers", str(a.workers),
         "--epochs", str(a.epochs),
-        "--bin", a.bin
+        "--bin", a.bin,
+        "--corpus-dir", "data/worker-corpus"
     ])
 
     if a.cycles > 0 and cycle >= a.cycles:
