@@ -33,7 +33,7 @@ jobs:
       - name: Python syntax
         run: |
           python3 -m py_compile api/server.py gateway/server.py policy/engine.py policy/runtime.py
-          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py
+          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py tools/wiki_fetch.py tools/auto_research.py tools/progress.py
           PYTHONPATH=. python3 policy/test_runtime.py
 
       - name: Policy tests
