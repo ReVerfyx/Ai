@@ -177,9 +177,21 @@ def build_and_train(workers, epochs):
         subprocess.check_call(["python3",str(ROOT/"tools/build_corpus.py"),
                                str(ROOT/"data/web/worker-1"),
                                "--out",str(ROOT/"data/worker-corpus/worker-1.txt")])
-    subprocess.check_call(["python3",str(ROOT/"tools/multi_train.py"),
-                           "--workers",str(workers),"--epochs",str(epochs),
-                           "--corpus-dir","data/worker-corpus"])
+
+    args=["python3",str(ROOT/"tools/multi_train.py"),
+          "--workers",str(workers),"--epochs",str(epochs),
+          "--corpus-dir","data/worker-corpus"]
+
+    # Auto-detect the 50M sparse checkpoint so staged learning can never
+    # accidentally invoke the legacy tiny text trainer on a sparse model.
+    worker0=ROOT/"models/workers/worker-0.bin"
+    try:
+        if worker0.exists() and worker0.read_bytes()[:8] == b"REAISP21":
+            args += ["--engine","sparse"]
+    except OSError:
+        pass
+
+    subprocess.check_call(args)
 
 def bootstrap(workers, pages_per_topic, epochs):
     print("[learn] stage=bootstrap wikipedia",flush=True)
