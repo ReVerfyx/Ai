@@ -7,6 +7,7 @@ With --corpus-dir, worker N trains only from worker-N.txt.
 import argparse
 import os
 import shutil
+import time
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -48,10 +49,18 @@ def train_worker(binary: Path, worker_id: int, model: Path, corpus: Path,
     env["OMP_NUM_THREADS"] = "1"
     env["OPENBLAS_NUM_THREADS"] = "1"
     print(f"[worker {worker_id}] independent checkpoint={model} corpus={corpus}")
-    subprocess.check_call([
-        str(binary), "text-train", str(model), str(corpus),
-        str(epochs), str(seq_len), str(lr)
-    ], env=env)
+    training = model.with_suffix(model.suffix + f".training-{os.getpid()}-{worker_id}")
+    shutil.copy2(model, training)
+    try:
+        subprocess.check_call([
+            str(binary), "text-train", str(training), str(corpus),
+            str(epochs), str(seq_len), str(lr)
+        ], env=env)
+        backup = model.with_suffix(model.suffix + ".previous")
+        shutil.copy2(model, backup)
+        os.replace(training, model)
+    finally:
+        training.unlink(missing_ok=True)
 
 def main():
     ap = argparse.ArgumentParser()
