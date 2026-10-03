@@ -13,6 +13,9 @@ mkdir -p "$ROOT/models" "$ROOT/outputs" "$ROOT/data/web" "$ROOT/data/worker-corp
 
 [[ -f "$ROOT/models/text.bin" ]] || "$ROOT/build/reai" text-init "$ROOT/models/text.bin" 128
 [[ -f "$ROOT/models/image.bin" ]] || "$ROOT/build/reai" image-init "$ROOT/models/image.bin" 32 256
+mkdir -p "$ROOT/models/workers"
+[[ -f "$ROOT/models/workers/worker-0.bin" ]] || cp "$ROOT/models/text.bin" "$ROOT/models/workers/worker-0.bin"
+[[ -f "$ROOT/models/workers/worker-1.bin" ]] || cp "$ROOT/models/text.bin" "$ROOT/models/workers/worker-1.bin"
 
 if [[ ! -f /etc/reai-ai.env ]]; then
   KEY="$(python3 - <<'PY'
@@ -24,6 +27,8 @@ PY
 REAI_HOST=0.0.0.0
 REAI_PORT=8080
 REAI_API_KEY=$KEY
+REAI_TEXT_MODEL=$ROOT/models/workers/worker-0.bin
+REAI_IMAGE_MODEL=$ROOT/models/image.bin
 EOF
   sudo chmod 600 /etc/reai-ai.env
 fi
