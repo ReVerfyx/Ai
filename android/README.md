@@ -46,3 +46,21 @@ app/build/outputs/apk/debug/app-debug.apk
 Every Android/client update should produce a fresh debug APK artifact via GitHub Actions.
 The UI reference is the current ChatGPT-style mobile layout: side drawer/history,
 bottom composer, attachment menu, voice button, and effort-mode control.
+
+
+## Host helper
+
+AI server:
+```bash
+bash host.sh ai
+```
+
+Gateway server:
+```bash
+bash host.sh gateway AI_KEY
+```
+
+Continuous training:
+```bash
+bash host.sh train
+```
