@@ -87,3 +87,7 @@ Wikipedia bootstrap -> coverage-based read-only research browser -> independent 
 - multiple API keys;
 - 64x64 from-scratch image generator endpoint;
 - observer dashboard and candidate self-improvement loop.
+
+
+Final 0.0.3 sync: sparse 50M engine, multi-key API, public-web research,
+observer dashboard, and guarded self-improvement modes are now part of the backend.
