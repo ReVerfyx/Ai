@@ -10,7 +10,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote
 
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 ROOT = Path(__file__).resolve().parents[1]
 BIN = Path(os.getenv("REAI_BIN", ROOT / "build" / "reai"))
 TEXT_MODEL = Path(os.getenv("REAI_TEXT_MODEL", ROOT / "models" / "text.bin"))
