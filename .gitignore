@@ -1,0 +1,9 @@
+build/
+models/
+outputs/
+data/web/
+data/corpus.txt
+data/images.tsv
+*.bin
+*.ppm
+__pycache__/
