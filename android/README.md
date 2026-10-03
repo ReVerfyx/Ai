@@ -72,3 +72,9 @@ The launcher now uses `ModernMainActivity`, which replaces the earlier legacy
 drawer/composer shell. The refreshed client uses the current simplified mobile
 layout direction: compact header, horizontally grouped tools in the sidebar,
 minimal chat history, modern bottom composer, bottom sheets, and model modes.
+
+
+## Learning backend sync
+
+This APK build is synced with the staged learning backend:
+Wikipedia bootstrap -> coverage-based read-only research browser -> independent workers.
