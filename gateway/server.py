@@ -25,7 +25,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from policy.runtime import check_text, check_generated_text, public_error, wrap_untrusted, control_prefix
 
-VERSION = "0.0.5"
+VERSION = "0.0.6"
 LISTEN_HOST = os.getenv("REAI_GATEWAY_HOST", "0.0.0.0")
 LISTEN_PORT = int(os.getenv("REAI_GATEWAY_PORT", "8090"))
 AI_BASE = os.getenv("REAI_AI_BASE", "http://2.26.85.86:8080").rstrip("/")
@@ -35,6 +35,7 @@ FILES_DIR = Path(os.getenv("REAI_GATEWAY_FILES", ROOT / "data" / "gateway-files"
 MEDIA_DIR = Path(os.getenv("REAI_GATEWAY_MEDIA", ROOT / "data" / "gateway-media"))
 MAX_UPLOAD = int(os.getenv("REAI_MAX_UPLOAD_BYTES", str(12 * 1024 * 1024)))
 SESSION_DAYS = int(os.getenv("REAI_SESSION_DAYS", "30"))
+MOBILE_APP_KEY = os.getenv("REAI_MOBILE_APP_KEY", "reai-mobile-v1")
 
 DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 FILES_DIR.mkdir(parents=True, exist_ok=True)
@@ -188,6 +189,12 @@ class Handler(BaseHTTPRequestHandler):
             """, (th, now())).fetchone()
         return dict(row) if row else None
 
+    def mobile_authorized(self):
+        auth = self.headers.get("Authorization", "")
+        if not auth.startswith("Bearer "):
+            return False
+        return hmac.compare_digest(auth[7:].strip(), MOBILE_APP_KEY)
+
     def require_user(self):
         user = self.current_user()
         if not user:
@@ -215,6 +222,18 @@ class Handler(BaseHTTPRequestHandler):
                     "video_understanding": False,
                     "voice": False
                 }
+            })
+
+        if self.path == "/v1/models":
+            if not self.mobile_authorized():
+                return self.json(401, {"error":"unauthorized"})
+            return self.json(200, {
+                "object": "list",
+                "data": [{
+                    "id": "reverfyx-ai",
+                    "object": "model",
+                    "owned_by": "ReVerfyx"
+                }]
             })
 
         user = self.require_user()
@@ -297,6 +316,13 @@ class Handler(BaseHTTPRequestHandler):
                 if not row or not hmac.compare_digest(row["password_hash"], password_hash(password, row["salt"])):
                     return self.json(401, {"error":"invalid_credentials"})
                 return self._new_session(row["id"], row["username"])
+
+            if self.path == "/v1/chat/completions":
+                if not self.mobile_authorized():
+                    return self.json(401, {"error":"unauthorized"})
+                data = self.body_json(limit=4_000_000)
+                result = ai_request("/v1/chat/completions", data)
+                return self.json(200, result)
 
             user = self.require_user()
             if not user:
