@@ -1,0 +1,31 @@
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+      - name: Build
+        run: cmake --build build -j2
+      - name: Smoke test text checkpoint
+        run: |
+          ./build/reai text-init /tmp/text.bin 16
+          printf 'hello world hello world\n' > /tmp/corpus.txt
+          ./build/reai text-train /tmp/text.bin /tmp/corpus.txt 1 4 0.001
+          ./build/reai text-generate /tmp/text.bin hello 8 1.0 8 >/tmp/out.txt
+      - name: Smoke test image checkpoint
+        run: |
+          ./build/reai image-init /tmp/image.bin 4 8
+          python3 - <<'PY'
+          from pathlib import Path
+          Path('/tmp/a.ppm').write_bytes(b'P6\n4 4\n255\n' + bytes([255,0,0]) * 16)
+          Path('/tmp/images.tsv').write_text('/tmp/a.ppm\ta red square\n')
+          PY
+          ./build/reai image-train /tmp/image.bin /tmp/images.tsv 1 0.001
+          ./build/reai image-generate /tmp/image.bin 'a red square' /tmp/out.ppm 4
