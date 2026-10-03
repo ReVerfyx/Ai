@@ -103,9 +103,69 @@ EOF
     echo "Logs: bash host.sh logs train"
     ;;
 
+  bootstrap|learn|research)
+    require_local
+    cd "$ROOT"
+    sudo systemctl disable --now reai-trainer 2>/dev/null || true
+    sudo systemctl disable --now reai-learning 2>/dev/null || true
+
+    case "$CMD" in
+      bootstrap)
+        LEARN_ARGS="--workers 2 --bootstrap-only --bootstrap-pages 8 --epochs 1 --max-data-gb 20"
+        ;;
+      research)
+        LEARN_ARGS="--workers 2 --skip-bootstrap --epochs 1 --sleep 120 --max-data-gb 20"
+        ;;
+      learn)
+        LEARN_ARGS="--workers 2 --bootstrap-pages 8 --epochs 1 --sleep 120 --max-data-gb 20"
+        ;;
+    esac
+
+    sudo tee /etc/reai-learning.env >/dev/null <<EOF
+REAI_LEARN_ARGS="$LEARN_ARGS"
+EOF
+    sudo chmod 600 /etc/reai-learning.env
+
+    sudo tee /etc/systemd/system/reai-learning.service >/dev/null <<EOF
+[Unit]
+Description=ReVerfyx AI staged autonomous learning
+After=network-online.target reai.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=$(id -un)
+WorkingDirectory=$ROOT
+EnvironmentFile=/etc/reai-learning.env
+ExecStart=/bin/bash -lc 'exec /usr/bin/python3 "$ROOT/tools/auto_research.py" $REAI_LEARN_ARGS'
+Restart=on-failure
+RestartSec=20
+Nice=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    sudo systemctl daemon-reload
+    sudo systemctl enable --now reai-learning
+    echo "LEARNING STARTED: $CMD"
+    echo "Progress: bash host.sh progress"
+    echo "Logs: bash host.sh logs learn"
+    ;;
+
   stop-train)
     sudo systemctl disable --now reai-trainer 2>/dev/null || true
     echo "TRAINING STOPPED"
+    ;;
+
+  stop-learn)
+    sudo systemctl disable --now reai-learning 2>/dev/null || true
+    echo "AUTONOMOUS LEARNING STOPPED"
+    ;;
+
+  progress)
+    require_local
+    python3 "$ROOT/tools/progress.py"
     ;;
 
   update)
@@ -126,6 +186,9 @@ EOF
     if systemctl list-unit-files 2>/dev/null | grep -q '^reai-trainer.service'; then
       sudo systemctl restart reai-trainer
     fi
+    if systemctl list-unit-files 2>/dev/null | grep -q '^reai-learning.service'; then
+      sudo systemctl restart reai-learning
+    fi
     echo "UPDATED"
     ;;
 
@@ -136,6 +199,8 @@ EOF
     systemctl --no-pager --full status reai-gateway 2>/dev/null || true
     echo "--- TRAINER ---"
     systemctl --no-pager --full status reai-trainer 2>/dev/null || true
+    echo "--- LEARNING ---"
+    systemctl --no-pager --full status reai-learning 2>/dev/null || true
     ;;
 
   logs)
@@ -144,7 +209,8 @@ EOF
       ai) UNIT=reai ;;
       gateway) UNIT=reai-gateway ;;
       train|trainer) UNIT=reai-trainer ;;
-      *) echo "logs: ai | gateway | train"; exit 2 ;;
+      learn|learning|research) UNIT=reai-learning ;;
+      *) echo "logs: ai | gateway | train | learn"; exit 2 ;;
     esac
     sudo journalctl -u "$UNIT" -f -n 80
     ;;
@@ -163,16 +229,30 @@ AI server:
 Gateway/user server:
   bash host.sh gateway AI_KEY
 
-Continuous independent training (NO git/network update required):
+Wikipedia bootstrap only:
+  bash host.sh bootstrap
+
+Wikipedia first, then autonomous read-only research:
+  bash host.sh learn
+
+Start research stage only:
+  bash host.sh research
+
+Legacy continuous Wikipedia training:
   bash host.sh train
+
+Check real learning progress:
+  bash host.sh progress
 
 Other:
   bash host.sh stop-train
+  bash host.sh stop-learn
   bash host.sh update
   bash host.sh status
   bash host.sh logs ai
   bash host.sh logs gateway
   bash host.sh logs train
+  bash host.sh logs learn
   bash host.sh key
 EOF
     ;;
