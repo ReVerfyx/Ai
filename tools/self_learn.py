@@ -17,6 +17,7 @@ ap.add_argument("--hours", type=float, default=0.0, help="0 = no time limit")
 ap.add_argument("--pause", type=float, default=5.0)
 ap.add_argument("--bin", default="build/reai")
 ap.add_argument("--same-host", action="store_true")
+ap.add_argument("--max-data-gb", type=float, default=20.0, help="max cached web data across workers; 0 = unlimited")
 a = ap.parse_args()
 
 root = Path(__file__).resolve().parents[1]
@@ -32,6 +33,26 @@ def crawl_for_worker(worker_id: int, seed: str):
     if a.same_host:
         cmd.append("--same-host")
     subprocess.check_call(cmd)
+
+def prune_web_cache():
+    if a.max_data_gb <= 0:
+        return
+    root_dir = root / "data" / "web"
+    files = [p for p in root_dir.rglob("*.txt") if p.is_file()]
+    total = sum(p.stat().st_size for p in files)
+    limit = int(a.max_data_gb * 1024 * 1024 * 1024)
+    if total <= limit:
+        return
+    for p in sorted(files, key=lambda x: x.stat().st_mtime):
+        try:
+            size = p.stat().st_size
+            p.unlink()
+            total -= size
+            if total <= limit:
+                break
+        except FileNotFoundError:
+            pass
+    print(f"[storage] web cache pruned to {total / (1024**3):.2f} GiB")
 
 def build_worker_corpus(worker_id: int):
     source = root / "data" / "web" / f"worker-{worker_id}"
@@ -55,6 +76,8 @@ while True:
             ]
             for f in futures:
                 f.result()
+
+    prune_web_cache()
 
     with ThreadPoolExecutor(max_workers=a.workers) as pool:
         futures = [pool.submit(build_worker_corpus, i) for i in range(a.workers)]
