@@ -1,11 +1,11 @@
-# ReVerfyx AI Android client — 0.0.2
+# ReVerfyx AI Android client — 0.0.3
 
 The Android app talks only to the application gateway:
 
 - Gateway/client server: `31.77.14.194:8090`
 - AI server: not embedded in the APK; the gateway knows it.
 
-Implemented in 0.0.2:
+Implemented in 0.0.3:
 
 - registration/login;
 - persistent chat history from the gateway database;
@@ -78,3 +78,12 @@ minimal chat history, modern bottom composer, bottom sheets, and model modes.
 
 This APK build is synced with the staged learning backend:
 Wikipedia bootstrap -> coverage-based read-only research browser -> independent workers.
+
+
+## 0.0.3 backend profile
+
+- sparse ~50.7M parameter text core;
+- API remains available while training uses independent checkpoints;
+- multiple API keys;
+- 64x64 from-scratch image generator endpoint;
+- observer dashboard and candidate self-improvement loop.
