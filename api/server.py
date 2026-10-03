@@ -17,6 +17,7 @@ TEXT_MODEL = Path(os.getenv("REAI_TEXT_MODEL", ROOT / "models" / "text.bin"))
 IMAGE_MODEL = Path(os.getenv("REAI_IMAGE_MODEL", ROOT / "models" / "image.bin"))
 OUT_DIR = Path(os.getenv("REAI_OUTPUT_DIR", ROOT / "outputs")).resolve()
 API_KEY = os.getenv("REAI_API_KEY", "")
+API_KEYS_FILE = Path(os.getenv("REAI_API_KEYS_FILE", "/etc/reai-api-keys.json"))
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 from policy.runtime import check_text, check_generated_text, public_error, control_prefix
@@ -26,6 +27,28 @@ def run(*args, timeout=600):
     if p.returncode:
         raise RuntimeError((p.stderr or p.stdout).strip())
     return p.stdout
+
+def text_engine(model_path: Path):
+    try:
+        with model_path.open("rb") as fh:
+            magic = fh.read(8)
+        return "sparse" if magic == b"REAISP21" else "text"
+    except Exception:
+        return "text"
+
+def configured_keys():
+    keys = set()
+    if API_KEY:
+        keys.add(API_KEY)
+    try:
+        data = json.loads(API_KEYS_FILE.read_text(encoding="utf-8"))
+        for item in data.get("keys", []):
+            value = str(item.get("key", "")).strip()
+            if value:
+                keys.add(value)
+    except Exception:
+        pass
+    return keys
 
 def _ppm_tokens(raw):
     i = 0
@@ -72,7 +95,14 @@ class Handler(BaseHTTPRequestHandler):
     server_version = f"ReAI/{VERSION}"
 
     def authorized(self):
-        return not API_KEY or self.headers.get("X-API-Key", "") == API_KEY
+        keys = configured_keys()
+        if not keys:
+            return True
+        supplied = self.headers.get("X-API-Key", "").strip()
+        auth = self.headers.get("Authorization", "").strip()
+        if auth.lower().startswith("bearer "):
+            supplied = auth[7:].strip()
+        return supplied in keys
 
     def send_json(self, code, obj):
         body = json.dumps(obj, ensure_ascii=False).encode()
@@ -85,7 +115,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            return self.send_json(200, {"ok": True, "engine": "reai-from-scratch", "version": VERSION})
+            return self.send_json(200, {
+                "ok": True,
+                "engine": "reai-from-scratch",
+                "text_engine": text_engine(TEXT_MODEL),
+                "version": VERSION,
+                "image_generation": True
+            })
         if self.path.startswith("/outputs/"):
             if not self.authorized():
                 return self.send_json(401, {"error": "unauthorized"})
@@ -131,7 +167,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 prompt = control_prefix() + user_prompt
                 tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
-                text = run("text-generate", TEXT_MODEL, prompt, tokens,
+                engine = text_engine(TEXT_MODEL)
+                cmd = "sparse-generate" if engine == "sparse" else "text-generate"
+                text = run(cmd, TEXT_MODEL, prompt, tokens,
                            data.get("temperature", 0.9), data.get("top_k", 40))
                 generated = text[len(prompt):] if text.startswith(prompt) else text
                 generated = generated.strip()
