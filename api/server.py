@@ -19,7 +19,7 @@ OUT_DIR = Path(os.getenv("REAI_OUTPUT_DIR", ROOT / "outputs")).resolve()
 API_KEY = os.getenv("REAI_API_KEY", "")
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
-from policy.engine import check_text, public_error, control_prefix
+from policy.runtime import check_text, check_generated_text, public_error, control_prefix
 
 def run(*args, timeout=600):
     p = subprocess.run([str(BIN), *map(str, args)], capture_output=True, text=True, timeout=timeout)
@@ -136,7 +136,7 @@ class Handler(BaseHTTPRequestHandler):
                 generated = text[len(prompt):] if text.startswith(prompt) else text
                 generated = generated.strip()
 
-                ok, rule = check_text(generated, "model_output")
+                ok, rule = check_generated_text(generated, user_prompt, "chat")
                 if not ok:
                     generated = "Не могу помочь с этим запросом."
 
