@@ -1,0 +1,29 @@
+{
+  "version": "0.0.2",
+  "default_action": "allow",
+  "rules": [
+    {
+      "id": "sexual_content_involving_minors",
+      "title": "Детская П@рн@",
+      "priority": 1000,
+      "enabled": true,
+      "action": "block",
+      "scope": ["chat", "image_generation", "file_analysis", "training_ingest"],
+      "reason": "Sexual content involving minors is prohibited.",
+      "match": {
+        "minor_terms": [
+          "ребенок", "ребёнок", "дети", "детская", "несовершеннолет",
+          "малолет", "child", "children", "minor", "underage"
+        ],
+        "sexual_terms": [
+          "порно", "п@рн@", "porn", "sexual", "sex", "nude", "naked",
+          "эротик", "explicit"
+        ],
+        "direct_terms": [
+          "детская п@рн@", "детское порно", "детская порнография",
+          "child porn", "child pornography", "csam"
+        ]
+      }
+    }
+  ]
+}
