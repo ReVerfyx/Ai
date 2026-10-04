@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from pathlib import Path
+import re
 import sys
 
 root = Path(sys.argv[1]).resolve()
@@ -20,8 +21,8 @@ android {
         applicationId = "studio.reverfyx.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.0.6"
+        versionCode = 9
+        versionName = "0.0.7"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -118,7 +119,26 @@ include(":app")
 manifest = app / "src/main/AndroidManifest.xml"
 text = manifest.read_text(encoding="utf-8")
 text = text.replace('android:label="@string/app_name"', 'android:label="@string/app_name"\n        android:usesCleartextTraffic="true"')
+text = text.replace('android:icon="@mipmap/ic_launcher"', 'android:icon="@drawable/ic_reverfyx"')
+text = text.replace('android:roundIcon="@mipmap/ic_launcher_round"', 'android:roundIcon="@drawable/ic_reverfyx"')
 manifest.write_text(text, encoding="utf-8")
+
+drawable = app / "src/main/res/drawable"
+drawable.mkdir(parents=True, exist_ok=True)
+(drawable / "ic_reverfyx.xml").write_text(r'''<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#111111"
+        android:pathData="M18,6 L90,6 C96.6,6 102,11.4 102,18 L102,90 C102,96.6 96.6,102 90,102 L18,102 C11.4,102 6,96.6 6,90 L6,18 C6,11.4 11.4,6 18,6 Z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,27 L57,27 C70,27 78,34 78,45 C78,53 74,59 66,62 L80,81 L66,81 L54,64 L47,64 L47,81 L34,81 Z M47,38 L47,54 L56,54 C62,54 66,51 66,46 C66,41 62,38 56,38 Z"/>
+</vector>
+''', encoding="utf-8")
 
 strings = app / "src/main/res/values/strings.xml"
 strings.write_text(r'''<?xml version="1.0" encoding="utf-8"?>
@@ -226,20 +246,17 @@ text = provider_store.read_text(encoding="utf-8")
 old = '''            val raw = prefs[key] ?: return@map emptyList()
             runCatching { json.decodeFromString(ListSerializer(ProviderConfig.serializer()), raw) }
                 .getOrDefault(emptyList())'''
-new = '''            val raw = prefs[key]
-            if (raw == null) {
-                return@map listOf(
-                    ProviderConfig(
-                        id = "reverfyx",
-                        name = "ReVerfyx AI",
-                        baseUrl = "http://31.77.14.194:8090/v1",
-                        apiKey = "reai-mobile-v1",
-                        models = listOf("reverfyx-ai")
-                    )
+new = '''            // ReVerfyx endpoint is application-internal. Never expose or
+            // preserve an old user-editable gateway address from earlier builds.
+            return@map listOf(
+                ProviderConfig(
+                    id = "reverfyx",
+                    name = "ReVerfyx AI",
+                    baseUrl = "http://2.26.85.86:8080/v1",
+                    apiKey = "reai-mobile-v1",
+                    models = listOf("reverfyx-ai")
                 )
-            }
-            runCatching { json.decodeFromString(ListSerializer(ProviderConfig.serializer()), raw) }
-                .getOrDefault(emptyList())'''
+            )'''
 if old not in text:
     raise SystemExit("ProviderStore patch anchor not found")
 provider_store.write_text(text.replace(old, new), encoding="utf-8")
@@ -268,9 +285,54 @@ text = provider.read_text(encoding="utf-8")
 text = text.replace(
     '    val all: List<Preset> = listOf(\n',
     '    val all: List<Preset> = listOf(\n'
-    '        Preset("ReVerfyx AI", "http://31.77.14.194:8090/v1", "reverfyx-ai",\n'
+    '        Preset("ReVerfyx AI", "http://2.26.85.86:8080/v1", "reverfyx-ai",\n'
     '            "ReVerfyx server"),\n'
 )
 provider.write_text(text, encoding="utf-8")
+
+
+# Hide internal provider/server configuration from the user interface.
+settings_ui = app / "src/main/kotlin/com/miniichat/ui/SettingsScreen.kt"
+text = settings_ui.read_text(encoding="utf-8")
+text = re.sub(
+    r'\n\s*// Providers entry\n.*?\n\s*// Assistants entry',
+    '\n\n            // Assistants entry',
+    text,
+    flags=re.S,
+)
+settings_ui.write_text(text, encoding="utf-8")
+
+# Hide model/provider internals from the chat header and assistant label.
+chat_ui = app / "src/main/kotlin/com/miniichat/ui/ChatScreen.kt"
+text = chat_ui.read_text(encoding="utf-8")
+text = text.replace(
+    'else settings.activeModel.ifBlank { activeProvider?.name ?: "Assistant" },',
+    'else "ReVerfyx AI",'
+)
+text = re.sub(
+    r'\n\s*// Row 2: small model chip aligned right\n.*?\n\s*HorizontalDivider',
+    '\n        HorizontalDivider',
+    text,
+    flags=re.S,
+)
+chat_ui.write_text(text, encoding="utf-8")
+
+# Provider/model editor still exists upstream for code compatibility, but there
+# is no navigation path to it in the ReVerfyx UI.
+app_root = app / "src/main/kotlin/com/miniichat/ui/AppRoot.kt"
+text = app_root.read_text(encoding="utf-8")
+text = re.sub(
+    r'onPickModel = \{\n\s*if \(providers\.isEmpty\(\)\) \{\n.*?\n\s*\} else showModelPicker = true\n\s*\}',
+    'onPickModel = { }',
+    text,
+    flags=re.S,
+)
+text = re.sub(
+    r'val needsProviderFix = msg\.contains\("provider".*?\|\| msg\.contains\("403"\)',
+    'val needsProviderFix = false',
+    text,
+    flags=re.S,
+)
+app_root.write_text(text, encoding="utf-8")
 
 print("ReVerfyx MiniiChat patch applied to", root)
