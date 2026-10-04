@@ -42,5 +42,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ReVerfyx-AI-0.0.6-miniichat
+          name: ReVerfyx-AI-0.0.7-private-ui
           path: android-upstream/app/build/outputs/apk/release/app-release.apk
