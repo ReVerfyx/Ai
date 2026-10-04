@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -21,20 +22,26 @@ LOG = ROOT / "data/self-improve/history.jsonl"
 
 ALLOW_PREFIX = ("src/","include/","api/","tools/")
 DENY_PREFIX = ("policy/","deploy/","host.sh",".github/")
-AUTO_SAFE = {
-    "src/sparse_text_model.cpp",
-    "include/sparse_text_model.hpp",
-    "tools/auto_research.py",
-    "tools/progress.py",
-    "tools/web_search.py",
-}
+DENY_EXACT = {"tools/reverfyx-dev-keystore.b64"}
 AUTO_PROMOTE = False
 
-TARGETS = [
-    ("tools/auto_research.py","Improve reliability, observability, and research quality without executing downloaded code."),
-    ("api/server.py","Improve API reliability and concurrency without weakening policy."),
-    ("src/sparse_text_model.cpp","Improve CPU efficiency or numerical stability without changing checkpoint safety."),
-    ("tools/progress.py","Improve learning progress reporting."),
+PREFERRED_TARGETS = [
+    "src/sparse_text_model.cpp",
+    "include/sparse_text_model.hpp",
+    "src/image_model.cpp",
+    "include/image_model.hpp",
+    "src/text_model.cpp",
+    "include/text_model.hpp",
+    "src/main.cpp",
+    "api/server.py",
+    "tools/auto_research.py",
+    "tools/multi_train.py",
+    "tools/build_corpus.py",
+    "tools/web_search.py",
+    "tools/progress.py",
+    "tools/rebrand_miniichat.py",
+    "tools/manage.py",
+    "tools/self_improve.py",
 ]
 
 def sh(args, cwd=None, check=True):
@@ -85,15 +92,34 @@ def extract_diff(text):
 def paths_from_diff(diff):
     return set(re.findall(r"^\+\+\+ b/(.+)$", diff, re.M))
 
-def allowed(paths):
-    if not paths:
+def path_allowed(p):
+    if p in DENY_EXACT:
         return False
-    for p in paths:
-        if any(p.startswith(x) for x in DENY_PREFIX):
-            return False
-        if not any(p.startswith(x) for x in ALLOW_PREFIX):
-            return False
-    return True
+    if any(p.startswith(x) for x in DENY_PREFIX):
+        return False
+    return any(p.startswith(x) for x in ALLOW_PREFIX)
+
+def allowed(paths):
+    return bool(paths) and all(path_allowed(p) for p in paths)
+
+def candidate_targets():
+    found = []
+    for rel in PREFERRED_TARGETS:
+        if (ROOT / rel).is_file() and path_allowed(rel):
+            found.append(rel)
+    for prefix in ALLOW_PREFIX:
+        base = ROOT / prefix.rstrip("/")
+        if not base.exists():
+            continue
+        for p in base.rglob("*"):
+            if not p.is_file():
+                continue
+            rel = p.relative_to(ROOT).as_posix()
+            if rel in found or not path_allowed(rel):
+                continue
+            if p.suffix.lower() in {".py",".cpp",".cc",".c",".hpp",".h",".json"}:
+                found.append(rel)
+    return found
 
 def validate():
     build = CAND/"build-self"
@@ -123,7 +149,7 @@ def health_ok():
         return False
 
 def promote(commit, paths):
-    if not AUTO_PROMOTE or not paths or not paths.issubset(AUTO_SAFE):
+    if not AUTO_PROMOTE or not allowed(paths):
         return False, "candidate-only"
 
     status = sh(["git","status","--porcelain","--untracked-files=no"], cwd=ROOT, check=False)
@@ -174,19 +200,26 @@ def promote(commit, paths):
 
 def one():
     candidate_ready()
-    target, goal = TARGETS[int(time.time()//1800) % len(TARGETS)]
+    targets = candidate_targets()
+    if not targets:
+        record({"time":int(time.time()),"status":"no-targets"})
+        return
+    target = targets[int(time.time()//300) % len(targets)]
     p = ROOT/target
-    code = p.read_text(encoding="utf-8",errors="ignore")[:24000]
-    prompt = f"""You are improving your own ReVerfyx AI source in a sandbox candidate branch.
-Task: {goal}
+    code = p.read_text(encoding="utf-8",errors="ignore")[:36000]
+    prompt = f"""You are autonomously improving your own ReVerfyx AI source.
 Target file: {target}
-Return ONLY one unified git diff beginning with: diff --git
-Keep the change small.
-Do not touch policy, systemd, credentials, network permissions, CMakeLists,
-deployment scripts, or GitHub Actions. Do not add dependencies.
-Do not execute or trust code from researched webpages.
 
-CURRENT FILE:
+Return ONLY one unified git diff beginning with: diff --git
+
+You may modify one or more files under src/, include/, api/, or tools/.
+Improve real quality, reliability, speed, training, research, observability,
+API behavior, or Android patch generation.
+Do not modify credentials, keystores, deployment/systemd configuration,
+GitHub Actions, or policy/.
+Do not execute code obtained from research sources.
+
+CURRENT TARGET:
 {code}
 """
     out = ask(prompt)
@@ -238,7 +271,7 @@ CURRENT FILE:
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--loop",action="store_true")
-    ap.add_argument("--interval",type=int,default=1800)
+    ap.add_argument("--interval",type=int,default=300)
     ap.add_argument("--auto-promote",action="store_true")
     a = ap.parse_args()
     global AUTO_PROMOTE
@@ -252,6 +285,10 @@ def main():
         if not a.loop:
             break
         time.sleep(max(300,a.interval))
+        argv=[sys.executable,str(Path(__file__).resolve()),"--loop","--interval",str(a.interval)]
+        if a.auto_promote:
+            argv.append("--auto-promote")
+        os.execv(sys.executable,argv)
 
 if __name__=="__main__":
     main()
