@@ -94,7 +94,7 @@ make_index(const std::vector<uint32_t>& vocab) {
 
 static std::vector<uint32_t>
 build_vocab(const std::string& corpus_path, uint32_t limit) {
-    if (limit < 256) throw std::runtime_error("unicode vocab must be >= 256");
+    if (limit < 128) throw std::runtime_error("unicode vocab must be >= 128");
 
     std::ifstream in(corpus_path, std::ios::binary);
     if (!in) throw std::runtime_error("cannot open corpus: " + corpus_path);
@@ -123,7 +123,15 @@ build_vocab(const std::string& corpus_path, uint32_t limit) {
     add(' ');
 
     for (uint32_t cp = 33; cp <= 126; ++cp) add(cp);
-    for (uint32_t cp = 0x0400; cp <= 0x052F; ++cp) add(cp);
+
+    // Tiny profiles need useful symbols first: ASCII + modern Russian.
+    add(0x0401); // Ё
+    for (uint32_t cp = 0x0410; cp <= 0x044F; ++cp) add(cp); // А-я
+    add(0x0451); // ё
+    add(0x2014); // —
+    add(0x00AB); // «
+    add(0x00BB); // »
+    add(0x2026); // …
 
     std::vector<std::pair<uint32_t, uint64_t>> ranked(freq.begin(), freq.end());
     std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
