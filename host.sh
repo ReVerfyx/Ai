@@ -73,7 +73,7 @@ case "$CMD" in
     SEED2="${2:-https://en.wikipedia.org/wiki/Main_Page}"
 
     sudo tee /etc/reai-trainer.env >/dev/null <<EOF
-REAI_TRAIN_ARGS="--workers 2 --cycles 0 --pages 40 --epochs 1 --max-data-gb 20 --same-host --seed $SEED1 --seed $SEED2"
+REAI_TRAIN_ARGS="--workers 2 --cycles 0 --pages 40 --epochs 1 --max-data-gb 0 --same-host --seed $SEED1 --seed $SEED2"
 EOF
     sudo chmod 600 /etc/reai-trainer.env
 
@@ -111,13 +111,13 @@ EOF
 
     case "$CMD" in
       bootstrap)
-        LEARN_ARGS="--workers 2 --bootstrap-only --bootstrap-pages 8 --epochs 1 --max-data-gb 20"
+        LEARN_ARGS="--workers 2 --bootstrap-only --bootstrap-pages 8 --epochs 1 --max-data-gb 0"
         ;;
       research)
-        LEARN_ARGS="--workers 2 --skip-bootstrap --epochs 1 --sleep 30 --train-every 4 --max-data-gb 20"
+        LEARN_ARGS="--workers 2 --skip-bootstrap --epochs 1 --sleep 10 --train-every 4 --max-data-gb 0"
         ;;
       learn)
-        LEARN_ARGS="--workers 2 --bootstrap-pages 12 --epochs 1 --sleep 30 --train-every 4 --max-data-gb 20"
+        LEARN_ARGS="--workers 2 --bootstrap-pages 12 --epochs 1 --sleep 10 --train-every 4 --max-data-gb 0"
         ;;
     esac
 
