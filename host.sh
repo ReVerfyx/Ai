@@ -114,10 +114,10 @@ EOF
         LEARN_ARGS="--workers 2 --bootstrap-only --bootstrap-pages 8 --epochs 1 --max-data-gb 0"
         ;;
       research)
-        LEARN_ARGS="--workers 2 --skip-bootstrap --epochs 1 --sleep 10 --train-every 2 --max-data-gb 0"
+        LEARN_ARGS="--workers 1 --skip-bootstrap --epochs 1 --sleep 10 --train-every 1 --max-data-gb 0"
         ;;
       learn)
-        LEARN_ARGS="--workers 2 --bootstrap-pages 12 --epochs 1 --sleep 10 --train-every 2 --max-data-gb 0"
+        LEARN_ARGS="--workers 1 --bootstrap-pages 12 --epochs 1 --sleep 10 --train-every 1 --max-data-gb 0"
         ;;
     esac
 
@@ -156,7 +156,7 @@ EOF
     echo "Logs: bash host.sh logs learn"
     ;;
 
-  upgrade50m|upgrade5m|key-new|keys|chat|image|observe|improve|improve-auto|improve-once|improve-log)
+  upgrade50m|upgrade5m|upgrade800k|key-new|keys|chat|image|observe|improve|improve-auto|improve-once|improve-log)
     require_local
     python3 "$ROOT/tools/manage.py" "$CMD" "$@"
     ;;
@@ -253,6 +253,7 @@ Check real learning progress:
   bash host.sh progress
 
 Model profiles / API / observer:
+  bash host.sh upgrade800k
   bash host.sh upgrade5m
   bash host.sh upgrade50m
   bash host.sh key-new phone
