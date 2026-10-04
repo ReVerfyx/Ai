@@ -1,6 +1,7 @@
 #include "image_model.hpp"
 #include "text_model.hpp"
 #include "sparse_text_model.hpp"
+#include "unicode_text_model.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -19,6 +20,10 @@ Commands:
   reai sparse-train <model.bin> <corpus.txt> [epochs] [seq_len] [lr]
   reai sparse-generate <model.bin> <prompt> [tokens] [temperature] [top_k]
   reai sparse-info <model.bin>
+  reai unicode-init <model.bin> <corpus.txt> [vocab=1024] [dim=128] [experts=64] [ff=256] [seed]
+  reai unicode-train <model.bin> <corpus.txt> [epochs] [seq_len] [lr]
+  reai unicode-generate <model.bin> <prompt> [tokens] [temperature] [top_k]
+  reai unicode-info <model.bin>
   reai image-init <model.bin> [size] [hidden]
   reai image-train <model.bin> <manifest.tsv> [epochs] [lr]
   reai image-generate <model.bin> <prompt> <out.ppm> [steps]
@@ -83,6 +88,42 @@ int main(int argc, char** argv) {
             auto model = SparseTextModel::load(argv[2]);
             std::cout << "engine=sparse-moe"
                       << " params=" << model.parameter_count()
+                      << " dim=" << model.dim()
+                      << " experts=" << model.experts()
+                      << " ff=" << model.ff() << "\n";
+        } else if (cmd == "unicode-init") {
+            if (argc < 4) throw std::runtime_error("unicode-init needs model and corpus");
+            const uint32_t vocab = argc > 4 ? static_cast<uint32_t>(std::stoul(argv[4])) : 1024;
+            const uint32_t dim = argc > 5 ? static_cast<uint32_t>(std::stoul(argv[5])) : 128;
+            const uint32_t experts = argc > 6 ? static_cast<uint32_t>(std::stoul(argv[6])) : 64;
+            const uint32_t ff = argc > 7 ? static_cast<uint32_t>(std::stoul(argv[7])) : 256;
+            const uint32_t seed = argc > 8 ? static_cast<uint32_t>(std::stoul(argv[8])) : 1337;
+            auto model = UnicodeTextModel::create_from_corpus(argv[3], vocab, dim, experts, ff, seed);
+            model.save(argv[2]);
+            std::cout << "created unicode text model: " << argv[2]
+                      << " params=" << model.parameter_count()
+                      << " vocab=" << model.vocab_size() << "\n";
+        } else if (cmd == "unicode-train") {
+            if (argc < 4) throw std::runtime_error("unicode-train needs model and corpus");
+            auto model = UnicodeTextModel::load(argv[2]);
+            const int epochs = argc > 4 ? std::stoi(argv[4]) : 1;
+            const int seq = argc > 5 ? std::stoi(argv[5]) : 48;
+            const float lr = argc > 6 ? std::stof(argv[6]) : 0.0005f;
+            model.train_file(argv[3], epochs, seq, lr, argv[2]);
+        } else if (cmd == "unicode-generate") {
+            if (argc < 4) throw std::runtime_error("unicode-generate needs model and prompt");
+            auto model = UnicodeTextModel::load(argv[2]);
+            const int tokens = argc > 4 ? std::stoi(argv[4]) : 200;
+            const float temp = argc > 5 ? std::stof(argv[5]) : 0.85f;
+            const int topk = argc > 6 ? std::stoi(argv[6]) : 40;
+            std::cout << model.generate(argv[3], tokens, temp, topk,
+                                        static_cast<uint32_t>(std::random_device{}())) << "\n";
+        } else if (cmd == "unicode-info") {
+            if (argc < 3) throw std::runtime_error("unicode-info needs model path");
+            auto model = UnicodeTextModel::load(argv[2]);
+            std::cout << "engine=unicode-moe"
+                      << " params=" << model.parameter_count()
+                      << " vocab=" << model.vocab_size()
                       << " dim=" << model.dim()
                       << " experts=" << model.experts()
                       << " ff=" << model.ff() << "\n";
