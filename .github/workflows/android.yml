@@ -42,5 +42,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ReVerfyx-AI-0.0.8
+          name: ReVerfyx-AI-0.0.9
           path: android-upstream/app/build/outputs/apk/release/app-release.apk
