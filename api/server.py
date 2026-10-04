@@ -39,6 +39,8 @@ def text_engine(model_path: Path):
     try:
         with model_path.open("rb") as fh:
             magic = fh.read(8)
+        if magic == b"REAIUC51":
+            return "unicode"
         return "sparse" if magic == b"REAISP21" else "text"
     except Exception:
         return "text"
@@ -227,7 +229,7 @@ class Handler(BaseHTTPRequestHandler):
                 prompt = control_prefix() + user_prompt
                 tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
                 engine = text_engine(TEXT_MODEL)
-                cmd = "sparse-generate" if engine == "sparse" else "text-generate"
+                cmd = "unicode-generate" if engine == "unicode" else ("sparse-generate" if engine == "sparse" else "text-generate")
                 text = run(cmd, TEXT_MODEL, prompt, tokens,
                            data.get("temperature", 0.9), data.get("top_k", 40))
                 generated = text[len(prompt):] if text.startswith(prompt) else text
