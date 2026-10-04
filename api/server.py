@@ -19,6 +19,7 @@ OUT_DIR = Path(os.getenv("REAI_OUTPUT_DIR", ROOT / "outputs")).resolve()
 API_KEY = os.getenv("REAI_API_KEY", "")
 API_KEYS_FILE = Path(os.getenv("REAI_API_KEYS_FILE", "/etc/reai-api-keys.json"))
 TRUSTED_GATEWAY_IP = os.getenv("REAI_TRUSTED_GATEWAY_IP", "31.77.14.194").strip()
+MOBILE_APP_KEY = os.getenv("REAI_MOBILE_APP_KEY", "reai-mobile-v1").strip()
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 from policy.runtime import check_text, check_generated_text, public_error, control_prefix
@@ -105,6 +106,8 @@ class Handler(BaseHTTPRequestHandler):
         auth = self.headers.get("Authorization", "").strip()
         if auth.lower().startswith("bearer "):
             supplied = auth[7:].strip()
+        if MOBILE_APP_KEY and supplied == MOBILE_APP_KEY:
+            return True
         return supplied in keys
 
     def send_json(self, code, obj):
@@ -117,6 +120,18 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == "/v1/models":
+            if not self.authorized():
+                return self.send_json(401, {"error": "unauthorized"})
+            return self.send_json(200, {
+                "object": "list",
+                "data": [{
+                    "id": "reverfyx-ai",
+                    "object": "model",
+                    "owned_by": "ReVerfyx"
+                }]
+            })
+
         if self.path == "/health":
             return self.send_json(200, {
                 "ok": True,
