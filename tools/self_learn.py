@@ -17,7 +17,7 @@ ap.add_argument("--hours", type=float, default=0.0, help="0 = no time limit")
 ap.add_argument("--pause", type=float, default=5.0)
 ap.add_argument("--bin", default="build/reai")
 ap.add_argument("--same-host", action="store_true")
-ap.add_argument("--max-data-gb", type=float, default=20.0, help="max cached web data across workers; 0 = unlimited")
+ap.add_argument("--max-data-gb", type=float, default=0.0, help="max cached web data across workers; 0 = unlimited")
 a = ap.parse_args()
 
 root = Path(__file__).resolve().parents[1]
