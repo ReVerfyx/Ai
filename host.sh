@@ -114,10 +114,10 @@ EOF
         LEARN_ARGS="--workers 2 --bootstrap-only --bootstrap-pages 8 --epochs 1 --max-data-gb 0"
         ;;
       research)
-        LEARN_ARGS="--workers 2 --skip-bootstrap --epochs 1 --sleep 10 --train-every 4 --max-data-gb 0"
+        LEARN_ARGS="--workers 2 --skip-bootstrap --epochs 1 --sleep 10 --train-every 2 --max-data-gb 0"
         ;;
       learn)
-        LEARN_ARGS="--workers 2 --bootstrap-pages 12 --epochs 1 --sleep 10 --train-every 4 --max-data-gb 0"
+        LEARN_ARGS="--workers 2 --bootstrap-pages 12 --epochs 1 --sleep 10 --train-every 2 --max-data-gb 0"
         ;;
     esac
 
