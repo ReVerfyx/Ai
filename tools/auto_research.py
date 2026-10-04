@@ -69,6 +69,27 @@ def fetch_wiki_topic(worker, topic):
             print(f"[research] wiki {host} {q}: {e}",flush=True)
     return added
 
+def fetch_random_wiki(worker, limit=12):
+    host="ru.wikipedia.org" if worker%2==0 else "en.wikipedia.org"
+    base=f"https://{host}/w/api.php"
+    try:
+        data=http_json(base+"?"+urlencode({
+            "action":"query","format":"json","generator":"random",
+            "grnnamespace":"0","grnlimit":str(limit),
+            "prop":"extracts|info","explaintext":"1","inprop":"url"
+        }))
+        added=0
+        for page in (data.get("query") or {}).get("pages",{}).values():
+            title=str(page.get("title") or "")
+            text=str(page.get("extract") or "")
+            url=str(page.get("fullurl") or f"https://{host}/wiki/{quote(title.replace(' ','_'))}")
+            if save_doc(worker,url,title,text,"wikipedia-random"):
+                added+=1
+        return added
+    except Exception as e:
+        print(f"[research] random wiki {host}: {e}",flush=True)
+        return 0
+
 def github_headers():
     h={"Accept":"application/vnd.github+json"}
     tok=os.getenv("GITHUB_TOKEN","").strip()
@@ -316,11 +337,15 @@ def main():
             topic=choose_topic(st,w)
             print(f"[research] cycle={cycle} worker={w} topic={topic['id']}",flush=True)
             wiki=fetch_wiki_topic(w,topic)
+            random_wiki=fetch_random_wiki(w,12)
             gh=fetch_github_topic(w,topic)
             web=fetch_web_topic(w,topic)
-            gained=wiki+gh+web
+            gained=wiki+random_wiki+gh+web
             st.setdefault("coverage",{})[topic["id"]]=st["coverage"].get(topic["id"],0)+gained
-            last.append({"worker":w,"topic":topic["id"],"docs":gained,"wiki":wiki,"github":gh,"web":web})
+            last.append({
+                "worker":w,"topic":topic["id"],"docs":gained,
+                "wiki":wiki,"random_wiki":random_wiki,"github":gh,"web":web
+            })
         st["cycles"]=cycle
         st["last"]=last
         st["updated"]=int(time.time())
