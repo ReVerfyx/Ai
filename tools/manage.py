@@ -188,13 +188,13 @@ def cmd_upgrade800k():
 
     run([
         ROOT/"build/reai","unicode-init",p,init_corpus,
-        "512","64","40","144","1337"
+        "192","64","40","144","1337"
     ])
 
-    print("[unicode800k] focused Russian warm-up")
+    print("[unicode800k] focused Russian warm-up: 20 epochs")
     run([
         ROOT/"build/reai","unicode-train",p,warmup,
-        "4","48","0.0007"
+        "20","48","0.0007"
     ])
 
     if not KEYS.exists():
