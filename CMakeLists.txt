@@ -9,6 +9,7 @@ add_executable(reai
     src/main.cpp
     src/text_model.cpp
     src/sparse_text_model.cpp
+    src/unicode_text_model.cpp
     src/image_model.cpp
 )
 
