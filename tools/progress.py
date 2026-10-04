@@ -74,3 +74,19 @@ if STATE.exists():
 else:
     print()
     print("research state: not started")
+
+brain_path=ROOT/"data/research/brain.json"
+if brain_path.exists():
+    try:
+        brain=json.loads(brain_path.read_text(encoding="utf-8"))
+        interests=brain.get("interests",{})
+        top=sorted(interests.items(),key=lambda x:x[1],reverse=True)[:10]
+        print()
+        print("research brain: active")
+        print("interests:", ", ".join(f"{k}={v:.1f}" for k,v in top))
+        hist=brain.get("history",[])
+        if hist:
+            last=hist[-1]
+            print("brain last action:", last.get("action"), last.get("query") or last.get("repo") or "")
+    except Exception as e:
+        print("brain state error:",e)
