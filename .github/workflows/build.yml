@@ -39,6 +39,19 @@ jobs:
           Path('/tmp/unicode-out.txt').read_text(encoding='utf-8')
           PY
 
+      - name: Smoke test focused tiny Unicode checkpoint
+        run: |
+          printf 'user: Привет!\nassistant: Привет! Чем могу помочь?\n' > /tmp/tiny-corpus.txt
+          ./build/reai unicode-init /tmp/tiny.bin /tmp/tiny-corpus.txt 192 64 40 144 123
+          ./build/reai unicode-info /tmp/tiny.bin
+          ./build/reai unicode-train /tmp/tiny.bin /tmp/tiny-corpus.txt 1 8 0.001
+          ./build/reai unicode-generate /tmp/tiny.bin 'user: Привет!\nassistant:' 12 0.55 12 >/tmp/tiny-out.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('/tmp/tiny-out.txt').read_text(encoding='utf-8')
+          assert '重' not in s
+          PY
+
       - name: Smoke test image checkpoint
         run: |
           ./build/reai image-init /tmp/image.bin 4 8
@@ -53,7 +66,7 @@ jobs:
       - name: Python syntax
         run: |
           python3 -m py_compile api/server.py gateway/server.py policy/engine.py policy/runtime.py
-          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py tools/wiki_fetch.py tools/auto_research.py tools/progress.py tools/web_search.py tools/observer.py tools/self_improve.py tools/manage.py tools/make_warmup_corpus.py
+          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py tools/wiki_fetch.py tools/auto_research.py tools/progress.py tools/web_search.py tools/observer.py tools/self_improve.py tools/manage.py tools/make_warmup_corpus.py tools/sandbox_exec.py
           PYTHONPATH=. python3 policy/test_runtime.py
 
       - name: Policy tests
