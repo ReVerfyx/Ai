@@ -150,7 +150,7 @@ def cmd_upgrade5m():
 
 def cmd_upgrade800k():
     run(["apt-get","update"])
-    run(["apt-get","install","-y","build-essential","cmake","python3","git"])
+    run(["apt-get","install","-y","build-essential","cmake","python3","git","bubblewrap"])
     run(["cmake","-S",ROOT,"-B",ROOT/"build","-DCMAKE_BUILD_TYPE=Release"])
     run(["cmake","--build",ROOT/"build","-j",str(max(1,os.cpu_count() or 1))])
 
