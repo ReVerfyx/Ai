@@ -148,6 +148,75 @@ def cmd_upgrade5m():
         print(p, f"{p.stat().st_size/1024/1024:.1f} MB")
     print("Fast Unicode ~5M profile enabled. Previous checkpoints are preserved in models/legacy.")
 
+def cmd_upgrade800k():
+    run(["apt-get","update"])
+    run(["apt-get","install","-y","build-essential","cmake","python3","git"])
+    run(["cmake","-S",ROOT,"-B",ROOT/"build","-DCMAKE_BUILD_TYPE=Release"])
+    run(["cmake","--build",ROOT/"build","-j",str(max(1,os.cpu_count() or 1))])
+
+    workers=ROOT/"models/workers"
+    legacy=ROOT/"models/legacy"
+    corpus_dir=ROOT/"data/worker-corpus"
+    warmup=ROOT/"data/warmup/ru-basic.txt"
+    workers.mkdir(parents=True,exist_ok=True)
+    legacy.mkdir(parents=True,exist_ok=True)
+    corpus_dir.mkdir(parents=True,exist_ok=True)
+    stamp=time.strftime("%Y%m%d-%H%M%S")
+
+    run(["python3",ROOT/"tools/make_warmup_corpus.py"])
+
+    # Preserve every currently active checkpoint before replacing it.
+    for p in sorted(workers.glob("worker-*.bin")):
+        shutil.copy2(p,legacy/f"{p.stem}-{stamp}-{p.stat().st_size}.bin")
+        p.unlink()
+
+    # Build only the production worker for the fast experiment.
+    p=workers/"worker-0.bin"
+    web_corpus=corpus_dir/"worker-0.txt"
+    web=ROOT/"data/web"/"worker-0"
+    if web.exists():
+        run([
+            "python3",ROOT/"tools/build_corpus.py",web,
+            "--out",web_corpus
+        ],check=False)
+
+    init_corpus=ROOT/"data/warmup/init-800k.txt"
+    parts=[warmup.read_text(encoding="utf-8")]
+    if web_corpus.exists():
+        parts.append(web_corpus.read_text(encoding="utf-8",errors="ignore")[:2_000_000])
+    init_corpus.write_text("\n\n".join(parts),encoding="utf-8")
+
+    run([
+        ROOT/"build/reai","unicode-init",p,init_corpus,
+        "512","64","40","144","1337"
+    ])
+
+    print("[unicode800k] focused Russian warm-up")
+    run([
+        ROOT/"build/reai","unicode-train",p,warmup,
+        "4","48","0.0007"
+    ])
+
+    if not KEYS.exists():
+        KEYS.write_text('{"keys":[]}\n')
+        KEYS.chmod(0o600)
+
+    env_set(AI_ENV,"REAI_TEXT_MODEL",p)
+    env_set(AI_ENV,"REAI_API_KEYS_FILE",KEYS)
+
+    learn_env=Path("/etc/reai-learning.env")
+    if learn_env.exists():
+        env_set(learn_env,"REAI_TRAIN_ENGINE","unicode")
+
+    run(["systemctl","restart","reai"],check=False)
+    if run(["systemctl","list-unit-files"],check=False,capture_output=True,text=True).stdout.find("reai-learning.service")>=0:
+        run(["systemctl","restart","reai-learning"],check=False)
+
+    run([ROOT/"build/reai","unicode-info",p])
+    print(p, f"{p.stat().st_size/1024/1024:.2f} MB")
+    print("Fast Unicode ~0.8M profile enabled.")
+    print("Previous checkpoints are preserved in models/legacy.")
+
 def load_keys():
     try:return json.loads(KEYS.read_text())
     except Exception:return {"keys":[]}
@@ -231,6 +300,7 @@ def main():
     args=sys.argv[2:]
     if cmd=="upgrade50m":cmd_upgrade50m()
     elif cmd=="upgrade5m":cmd_upgrade5m()
+    elif cmd=="upgrade800k":cmd_upgrade800k()
     elif cmd=="key-new":cmd_key_new(args[0] if args else "client")
     elif cmd=="keys":cmd_keys()
     elif cmd=="chat":cmd_chat(" ".join(args) or "Привет")
