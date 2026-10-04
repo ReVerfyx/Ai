@@ -57,6 +57,30 @@ def configured_keys():
         pass
     return keys
 
+def message_text_and_images(content):
+    """Return visible text and whether an OpenAI-style message contains images.
+
+    Never stringify data: URLs/base64 into policy input or the text-model prompt.
+    """
+    if isinstance(content, str):
+        return content, False
+    if not isinstance(content, list):
+        return "", False
+
+    parts = []
+    has_image = False
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        kind = str(part.get("type", "")).lower()
+        if kind == "text":
+            value = part.get("text", "")
+            if isinstance(value, str) and value.strip():
+                parts.append(value)
+        elif kind in ("image_url", "input_image", "image"):
+            has_image = True
+    return "\n".join(parts), has_image
+
 def _ppm_tokens(raw):
     i = 0
     tokens = []
@@ -174,20 +198,32 @@ class Handler(BaseHTTPRequestHandler):
             if self.path == "/v1/chat/completions":
                 messages = data.get("messages") or []
 
-                # Only untrusted user input is policy-checked here.
-                # System/developer messages are trusted control text; checking them
-                # caused the server to block its own political-neutrality prompt.
+                # Only visible user text is policy-checked. Image data/base64
+                # must never be stringified into either policy input or a text prompt.
+                normalized = []
+                has_images = False
                 for m in messages:
-                    if str(m.get("role", "user")) != "user":
-                        continue
-                    content = str(m.get("content", ""))
-                    ok, rule = check_text(content, "chat", detect_injection=True)
-                    if not ok:
-                        return self.send_json(400, public_error(rule))
+                    role = str(m.get("role", "user"))
+                    visible_text, message_has_image = message_text_and_images(m.get("content", ""))
+                    has_images = has_images or message_has_image
 
-                user_prompt = "\n".join(
-                    f"{m.get('role','user')}: {m.get('content','')}" for m in messages
-                )
+                    if role == "user" and visible_text:
+                        ok, rule = check_text(visible_text, "chat", detect_injection=True)
+                        if not ok:
+                            return self.send_json(400, public_error(rule))
+
+                    if visible_text:
+                        normalized.append(f"{role}: {visible_text}")
+                    elif message_has_image:
+                        normalized.append(f"{role}: [изображение прикреплено]")
+
+                if has_images:
+                    return self.send_json(422, {
+                        "error": "vision_not_supported",
+                        "message": "Текущая модель ReVerfyx AI пока не умеет анализировать изображения."
+                    })
+
+                user_prompt = "\n".join(normalized)
                 prompt = control_prefix() + user_prompt
                 tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
                 engine = text_engine(TEXT_MODEL)
