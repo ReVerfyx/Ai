@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""Autonomous read-only research loop for ReVerfyx AI 0.0.2.
+"""Autonomous research loop for ReVerfyx AI.
 
-Stage 1: targeted Wikipedia bootstrap.
-Stage 2: coverage-based research across Wikipedia, GitHub, and the public web.
-No downloaded code is executed.
+The research agent keeps a persistent curiosity/memory state, discovers new
+topics from what it reads, searches the public web/Wikipedia/GitHub without a
+global corpus-size cap, and may run selected downloaded code only inside the
+disposable root sandbox provided by tools/sandbox_exec.py.
 """
-import argparse, base64, hashlib, json, os, random, shutil, subprocess, tempfile, time
+import argparse, base64, hashlib, json, os, random, re, shutil, subprocess, tempfile, time
 from pathlib import Path
 from urllib.parse import urlencode, quote
 from urllib.request import Request, urlopen
@@ -15,6 +16,7 @@ from web_search import fetch_results
 ROOT = Path(__file__).resolve().parents[1]
 TOPICS = json.loads((ROOT/"tools/research_topics.json").read_text(encoding="utf-8"))["topics"]
 STATE = ROOT/"data/research/state.json"
+BRAIN = ROOT/"data/research/brain.json"
 BOOTSTRAP_DONE = ROOT/"data/research/.bootstrap_done"
 UA = "ReVerfyxAI/0.0.2 (+https://github.com/ReVerfyx/Ai; autonomous read-only research)"
 
@@ -201,6 +203,9 @@ def fetch_github_topic(worker, topic):
                 f"text-files={repo_files} bytes={repo_bytes}",
                 flush=True,
             )
+            brain=load_brain()
+            maybe_sandbox_repo(worker, query, checkout, full, brain)
+            save_brain(brain)
     return added
 
 def fetch_web_topic(worker, topic):
@@ -238,9 +243,123 @@ def save_state(st):
     tmp.write_text(json.dumps(st,ensure_ascii=False,indent=2),encoding="utf-8")
     os.replace(tmp,STATE)
 
-def choose_topic(st, worker):
+def load_brain():
+    if BRAIN.exists():
+        try:
+            data=json.loads(BRAIN.read_text(encoding="utf-8"))
+            if isinstance(data,dict):
+                data.setdefault("interests",{})
+                data.setdefault("history",[])
+                return data
+        except Exception:
+            pass
+    interests={}
+    for t in TOPICS:
+        q=str(t.get("query") or t.get("id") or "").strip()
+        if q:
+            interests[q]=1.0
+    return {"interests":interests,"history":[],"created":int(time.time())}
+
+def save_brain(brain):
+    BRAIN.parent.mkdir(parents=True,exist_ok=True)
+    interests=brain.setdefault("interests",{})
+    # Keep the persistent brain bounded as metadata; the actual training corpus is unlimited.
+    best=sorted(interests.items(),key=lambda x:x[1],reverse=True)[:1000]
+    brain["interests"]={k:round(float(v),4) for k,v in best}
+    brain["history"]=brain.get("history",[])[-500:]
+    brain["updated"]=int(time.time())
+    tmp=BRAIN.with_suffix(".tmp")
+    tmp.write_text(json.dumps(brain,ensure_ascii=False,indent=2),encoding="utf-8")
+    os.replace(tmp,BRAIN)
+
+STOPWORDS={
+    "https","http","www","source","title","type","this","that","with","from","into",
+    "для","как","что","это","или","при","его","она","они","также","который","которые",
+    "the","and","are","was","were","have","has","not","you","your","about","using",
+}
+
+def discover_interests(worker, brain, max_files=80):
+    root=ROOT/"data/web"/f"worker-{worker}"
+    if not root.exists():
+        return
+    files=sorted(
+        (p for p in root.rglob("*.txt") if p.is_file()),
+        key=lambda p:p.stat().st_mtime,
+        reverse=True
+    )[:max_files]
+    counts={}
+    for p in files:
+        try:
+            text=p.read_text(encoding="utf-8",errors="ignore")[:18000]
+        except Exception:
+            continue
+        for token in re.findall(r"[A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_+.#-]{3,48}",text):
+            key=token.strip("._-").lower()
+            if len(key)<4 or key in STOPWORDS or key.isdigit():
+                continue
+            counts[key]=counts.get(key,0)+1
+    interests=brain.setdefault("interests",{})
+    for key,count in sorted(counts.items(),key=lambda x:x[1],reverse=True)[:80]:
+        interests[key]=float(interests.get(key,0.0))*0.995 + min(8.0, 0.2*count)
+
+def choose_brain_topic(brain, worker):
+    interests=brain.setdefault("interests",{})
+    if not interests:
+        return None
+    ranked=sorted(interests.items(),key=lambda x:x[1],reverse=True)[:120]
+    # Mostly follow high-interest concepts, sometimes deliberately explore the tail.
+    if random.random()<0.72:
+        pool=ranked[:max(12,min(40,len(ranked)))]
+    else:
+        pool=ranked
+    query=random.choice(pool)[0]
+    return {
+        "id":"brain:"+hashlib.sha1(query.encode("utf-8","ignore")).hexdigest()[:10],
+        "query":query,
+        "wiki":[query],
+        "github":query,
+        "_brain_query":query,
+    }
+
+def maybe_sandbox_repo(worker, query, checkout, full, brain):
+    interests=brain.setdefault("interests",{})
+    score=float(interests.get(str(query).lower(),0.0))
+    # Curiosity-driven opportunity, not an obligation. Higher-interest subjects
+    # are more likely to be tried, while random exploration still happens.
+    probability=min(0.45,0.08 + score*0.015)
+    if random.random()>=probability:
+        return None
+    try:
+        cp=subprocess.run(
+            ["python3",str(ROOT/"tools/sandbox_exec.py"),str(checkout)],
+            capture_output=True,text=True,errors="replace",timeout=35
+        )
+        output=(cp.stdout or cp.stderr or "")[-12000:]
+        if output.strip():
+            save_doc(
+                worker,
+                f"sandbox://{full}",
+                f"Sandbox experiment: {full}",
+                output,
+                "sandbox-result",
+            )
+        brain.setdefault("history",[]).append({
+            "time":int(time.time()),"action":"sandbox-run",
+            "repo":full,"query":query,"result":output[-1200:]
+        })
+        return output
+    except Exception as e:
+        brain.setdefault("history",[]).append({
+            "time":int(time.time()),"action":"sandbox-error",
+            "repo":full,"query":query,"result":str(e)
+        })
+        return None
+
+def choose_topic(st, worker, brain):
+    dynamic=choose_brain_topic(brain,worker)
+    if dynamic and random.random()<0.80:
+        return dynamic
     coverage=st.setdefault("coverage",{})
-    # Independent workers pick from lowest-covered topics with worker offset.
     ranked=sorted(TOPICS,key=lambda t:(coverage.get(t["id"],0), t["id"]))
     pool=ranked[:max(4,min(10,len(ranked)))]
     return pool[worker % len(pool)]
@@ -342,12 +461,13 @@ def main():
         return
 
     st=load_state()
-    print("[learn] stage=research browser read-only",flush=True)
+    brain=load_brain()
+    print("[learn] stage=autonomous research brain",flush=True)
     while True:
         cycle=int(st.get("cycles",0))+1
         last=[]
         for w in range(workers):
-            topic=choose_topic(st,w)
+            topic=choose_topic(st,w,brain)
             print(f"[research] cycle={cycle} worker={w} topic={topic['id']}",flush=True)
             wiki=fetch_wiki_topic(w,topic)
             random_wiki=fetch_random_wiki(w,12)
@@ -359,10 +479,18 @@ def main():
                 "worker":w,"topic":topic["id"],"docs":gained,
                 "wiki":wiki,"random_wiki":random_wiki,"github":gh,"web":web
             })
+            q=str(topic.get("_brain_query") or topic.get("query") or topic["id"]).lower()
+            brain.setdefault("interests",{})[q]=float(brain.setdefault("interests",{}).get(q,0.0))+max(0.2,gained*0.15)
+            brain.setdefault("history",[]).append({
+                "time":int(time.time()),"action":"research","query":q,
+                "docs":gained,"wiki":wiki,"random_wiki":random_wiki,"github":gh,"web":web
+            })
+            discover_interests(w,brain)
         st["cycles"]=cycle
         st["last"]=last
         st["updated"]=int(time.time())
         save_state(st)
+        save_brain(brain)
         prune(a.max_data_gb)
         train_every=max(1,a.train_every)
         if cycle % train_every == 0:
