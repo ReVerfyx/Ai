@@ -25,10 +25,15 @@ sys.path.insert(0, str(ROOT))
 from policy.runtime import check_text, check_generated_text, public_error, control_prefix
 
 def run(*args, timeout=600):
-    p = subprocess.run([str(BIN), *map(str, args)], capture_output=True, text=True, timeout=timeout)
+    # The byte-level model can temporarily emit arbitrary byte sequences while
+    # undertrained. Capture raw bytes so one invalid UTF-8 byte cannot crash
+    # the whole HTTP request with UnicodeDecodeError.
+    p = subprocess.run([str(BIN), *map(str, args)], capture_output=True, timeout=timeout)
+    stdout = (p.stdout or b"").decode("utf-8", errors="replace")
+    stderr = (p.stderr or b"").decode("utf-8", errors="replace")
     if p.returncode:
-        raise RuntimeError((p.stderr or p.stdout).strip())
-    return p.stdout
+        raise RuntimeError((stderr or stdout).strip())
+    return stdout
 
 def text_engine(model_path: Path):
     try:
