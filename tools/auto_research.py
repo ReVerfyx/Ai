@@ -254,6 +254,15 @@ def build_and_train(workers, epochs):
                                str(ROOT/"data/web/worker-1"),
                                "--out",str(ROOT/"data/worker-corpus/worker-1.txt")])
 
+    warmup=ROOT/"data/warmup/ru-basic.txt"
+    if warmup.exists():
+        warm=warmup.read_text(encoding="utf-8",errors="ignore")
+        for i in range(workers):
+            corpus=ROOT/"data/worker-corpus"/f"worker-{i}.txt"
+            if corpus.exists():
+                with corpus.open("a",encoding="utf-8") as fh:
+                    fh.write("\n\n"+warm+"\n")
+
     args=["python3",str(ROOT/"tools/multi_train.py"),
           "--workers",str(workers),"--epochs",str(epochs),
           "--corpus-dir","data/worker-corpus"]
