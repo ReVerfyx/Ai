@@ -35,7 +35,12 @@ for w in [0,1]:
     docs=list((ROOT/"data/web"/f"worker-{w}").rglob("*.txt")) if (ROOT/"data/web"/f"worker-{w}").exists() else []
     if model.exists():
         st=model.stat()
-        print(f"worker-{w}: model={fmt_bytes(st.st_size)} updated={age(st.st_mtime)} ago")
+        try:
+            magic=model.read_bytes()[:8]
+            engine="unicode5m" if magic==b"REAIUC51" else ("sparse50m" if magic==b"REAISP21" else "legacy")
+        except Exception:
+            engine="?"
+        print(f"worker-{w}: engine={engine} model={fmt_bytes(st.st_size)} updated={age(st.st_mtime)} ago")
     else:
         print(f"worker-{w}: model=missing")
     print(f"          docs={len(docs)} corpus={fmt_bytes(corpus.stat().st_size) if corpus.exists() else 'missing'}")
