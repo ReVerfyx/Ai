@@ -41,7 +41,7 @@ for w in [0,1]:
             if magic==b"REAIUC51" and len(raw)>=24:
                 import struct
                 dim,experts,ff,vocab=struct.unpack("<IIII",raw[8:24])
-                if (vocab,dim,experts,ff)==(512,64,40,144):
+                if (dim,experts,ff)==(64,40,144):
                     engine="unicode800k"
                 elif (vocab,dim,experts,ff)==(1024,128,64,256):
                     engine="unicode5m"
