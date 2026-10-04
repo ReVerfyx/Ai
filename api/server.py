@@ -226,14 +226,35 @@ class Handler(BaseHTTPRequestHandler):
                     })
 
                 user_prompt = "\n".join(normalized)
-                prompt = control_prefix() + user_prompt
-                tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
                 engine = text_engine(TEXT_MODEL)
+
+                # The tiny Unicode experiment is trained on dialogue turns.
+                # Runtime policy is enforced outside the model, so do not drown
+                # a sub-million-parameter model in a long hidden control prompt.
+                if engine == "unicode":
+                    dialogue = "\n".join(
+                        line for line in normalized
+                        if line.startswith("user:") or line.startswith("assistant:")
+                    )
+                    prompt = dialogue[-4000:].rstrip() + "\nassistant:"
+                    temperature = min(float(data.get("temperature", 0.55)), 0.65)
+                    top_k = min(max(2, int(data.get("top_k", 12))), 16)
+                    tokens = max(1, min(int(data.get("max_tokens", 160)), 240))
+                else:
+                    prompt = control_prefix() + user_prompt
+                    temperature = float(data.get("temperature", 0.9))
+                    top_k = int(data.get("top_k", 40))
+                    tokens = max(1, min(int(data.get("max_tokens", 256)), 4096))
+
                 cmd = "unicode-generate" if engine == "unicode" else ("sparse-generate" if engine == "sparse" else "text-generate")
-                text = run(cmd, TEXT_MODEL, prompt, tokens,
-                           data.get("temperature", 0.9), data.get("top_k", 40))
+                text = run(cmd, TEXT_MODEL, prompt, tokens, temperature, top_k)
                 generated = text[len(prompt):] if text.startswith(prompt) else text
                 generated = generated.strip()
+                if engine == "unicode":
+                    # Do not let a tiny model invent the next conversation turn.
+                    for marker in ("\nuser:", "\nassistant:"):
+                        if marker in generated:
+                            generated = generated.split(marker, 1)[0].strip()
 
                 # Undertrained byte-level checkpoints can emit invalid UTF-8.
                 # Do not surface replacement-character garbage as a successful reply.
