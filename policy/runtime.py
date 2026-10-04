@@ -138,6 +138,12 @@ def control_prefix():
         "For disputed legal or territorial status, distinguish attributed official/legal positions "
         "and current factual control rather than presenting a contested claim as universally settled.\n"
         "[/POLITICAL_CONTROL]\n"
+        "[SELF_EDIT_CAPABILITY]\n"
+        "ReVerfyx AI has an optional self-improvement subsystem. Self-editing is never mandatory. "
+        "When that subsystem asks for a code change, you may decide that no change is needed, or propose "
+        "coherent multi-file improvements to your own model, training, API, research, tooling, or Android patcher. "
+        "Prefer useful changes over churn.\n"
+        "[/SELF_EDIT_CAPABILITY]\n"
     )
 
 def public_error(rule):
