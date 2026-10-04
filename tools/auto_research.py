@@ -57,10 +57,10 @@ def fetch_wiki_topic(worker, topic):
     hosts=["ru.wikipedia.org","en.wikipedia.org"]
     added=0
     queries=list(topic.get("wiki") or [])+[topic["query"]]
-    for idx,q in enumerate(queries[:5]):
+    for idx,q in enumerate(queries[:8]):
         host=hosts[(worker+idx)%len(hosts)]
         try:
-            for page in wiki_search(host,q,5):
+            for page in wiki_search(host,q,8):
                 title=str(page.get("title") or "")
                 text=str(page.get("extract") or "")
                 url=str(page.get("fullurl") or f"https://{host}/wiki/{quote(title.replace(' ','_'))}")
@@ -92,7 +92,7 @@ def fetch_github_topic(worker, topic):
     if not query: return 0
     added=0
     try:
-        repos=github_search_repos(query,2 if os.getenv("GITHUB_TOKEN") else 1)
+        repos=github_search_repos(query,3 if os.getenv("GITHUB_TOKEN") else 2)
     except Exception as e:
         print(f"[research] github search: {e}",flush=True); return 0
     for repo in repos:
@@ -109,7 +109,7 @@ def fetch_github_topic(worker, topic):
         candidates=[x for x in root if x.get("type")=="file" and Path(x.get("name","")).suffix.lower() in CODE_EXT]
         # Prefer README + a few source/config files.
         candidates=sorted(candidates,key=lambda x:(0 if x.get("name","").lower().startswith("readme") else 1, x.get("size",999999)))
-        max_files=12 if os.getenv("GITHUB_TOKEN") else 6
+        max_files=20 if os.getenv("GITHUB_TOKEN") else 10
         for item in candidates[:max_files]:
             if int(item.get("size") or 0)>120_000: continue
             try:
@@ -133,7 +133,7 @@ def fetch_web_topic(worker, topic):
     if not query:
         return 0
     try:
-        for url, text in fetch_results(query, limit=2):
+        for url, text in fetch_results(query, limit=5):
             title = urlparse_title(url)
             if save_doc(worker, url, title, text, "web"):
                 added += 1
@@ -242,6 +242,8 @@ def main():
     ap.add_argument("--epochs",type=int,default=1)
     ap.add_argument("--sleep",type=int,default=120)
     ap.add_argument("--max-data-gb",type=float,default=20)
+    ap.add_argument("--train-every",type=int,default=4,
+                    help="Train after this many research cycles; larger values prioritize faster data collection")
     a=ap.parse_args()
     workers=max(1,min(a.workers,os.cpu_count() or 1))
 
@@ -269,11 +271,16 @@ def main():
         st["updated"]=int(time.time())
         save_state(st)
         prune(a.max_data_gb)
-        try:
-            build_and_train(workers,a.epochs)
-        except subprocess.CalledProcessError as e:
-            print(f"[research] training error: {e}",flush=True)
-        time.sleep(max(30,a.sleep))
+        train_every=max(1,a.train_every)
+        if cycle % train_every == 0:
+            print(f"[research] training batch at cycle={cycle}",flush=True)
+            try:
+                build_and_train(workers,a.epochs)
+            except subprocess.CalledProcessError as e:
+                print(f"[research] training error: {e}",flush=True)
+        else:
+            print(f"[research] collected cycle={cycle}; next training in {train_every-(cycle % train_every)} cycle(s)",flush=True)
+        time.sleep(max(10,a.sleep))
 
 if __name__=="__main__":
     main()
