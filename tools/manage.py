@@ -122,6 +122,11 @@ def cmd_upgrade5m():
                 ROOT/"build/reai","unicode-init",p,corpus,
                 "1024","128","64","256",str(seed)
             ])
+            print(f"[unicode5m] warm-up worker-{i} on existing corpus")
+            run([
+                ROOT/"build/reai","unicode-train",p,corpus,
+                "2","48","0.0005"
+            ])
 
     if not KEYS.exists():
         KEYS.write_text('{"keys":[]}\n')
