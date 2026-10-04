@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 """Independent trainers for ReVerfyx AI.
 
-Supports the legacy dense text engine and the sparse ~50.7M parameter engine.
-Sparse workers remain independent but are trained sequentially on small VPSs so
-the API can stay responsive while training is in progress.
+Supports the legacy dense engine, the sparse ~50.7M byte engine, and the fast\nUnicode ~4.5M engine. Sparse/Unicode workers remain independent and train\nsequentially on small VPSs so the API stays responsive.
 """
 import argparse
 import os
@@ -32,7 +30,7 @@ def split_corpus(corpus: Path, out_dir: Path, workers: int):
     return paths
 
 def ensure_worker(binary: Path, production: Path, worker_model: Path,
-                  hidden: int, engine: str, seed: int):
+                  hidden: int, engine: str, seed: int, corpus_hint: Path):
     worker_model.parent.mkdir(parents=True, exist_ok=True)
     if worker_model.exists():
         return
@@ -40,6 +38,13 @@ def ensure_worker(binary: Path, production: Path, worker_model: Path,
         subprocess.check_call([
             str(binary), "sparse-init", str(worker_model),
             "256", "192", "512", str(seed)
+        ])
+    elif engine == "unicode":
+        if not corpus_hint.exists():
+            raise RuntimeError(f"unicode init needs corpus: {corpus_hint}")
+        subprocess.check_call([
+            str(binary), "unicode-init", str(worker_model), str(corpus_hint),
+            "1024", "128", "64", "256", str(seed)
         ])
     elif production.exists():
         shutil.copy2(production, worker_model)
@@ -63,7 +68,7 @@ def train_worker(binary: Path, worker_id: int, model: Path, corpus: Path,
     training = model.with_suffix(model.suffix + f".training-{os.getpid()}-{worker_id}")
     shutil.copy2(model, training)
     try:
-        cmd = "sparse-train" if engine == "sparse" else "text-train"
+        cmd = "unicode-train" if engine == "unicode" else ("sparse-train" if engine == "sparse" else "text-train")
         subprocess.check_call([
             str(binary), cmd, str(training), str(corpus),
             str(epochs), str(seq_len), str(lr)
@@ -90,7 +95,7 @@ def main():
     ap.add_argument("--hidden", type=int, default=128)
     ap.add_argument(
         "--engine",
-        choices=["text", "sparse"],
+        choices=["text", "sparse", "unicode"],
         default=os.getenv("REAI_TRAIN_ENGINE", "text")
     )
     args = ap.parse_args()
@@ -113,18 +118,18 @@ def main():
         model = workers_dir / f"worker-{i}.bin"
         ensure_worker(
             binary, production, model, args.hidden,
-            args.engine, 1337 + i * 7919
+            args.engine, 1337 + i * 7919, corpora[i]
         )
         jobs.append((i, model, corpora[i]))
 
-    if args.engine == "sparse":
-        # Independent checkpoints, sequential compute. This is deliberate:
-        # two simultaneous 50M trainers on 2 vCPU would make both much slower
-        # and would starve the API.
+    if args.engine in ("sparse", "unicode"):
+        # Independent checkpoints, sequential compute. Unicode is much smaller,
+        # but keeping it sequential avoids starving the API on a 2-vCPU VPS.
+        max_seq = 64 if args.engine == "unicode" else 48
         for i, model, corpus in jobs:
             train_worker(
                 binary, i, model, corpus,
-                args.epochs, min(args.seq_len, 48), args.lr, args.engine
+                args.epochs, min(args.seq_len, max_seq), args.lr, args.engine
             )
     else:
         with ThreadPoolExecutor(max_workers=workers) as pool:
