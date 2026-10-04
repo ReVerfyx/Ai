@@ -88,43 +88,98 @@ def github_contents(owner_repo, path=""):
     return http_json(url,github_headers())
 
 def fetch_github_topic(worker, topic):
+    """Pick repositories for a topic and ingest each selected repo as a whole.
+
+    Repositories are shallow-cloned into a temporary directory. No downloaded
+    code, build script, hook, submodule, or binary is executed.
+    """
     query=topic.get("github","").strip()
-    if not query: return 0
+    if not query:
+        return 0
     added=0
     try:
         repos=github_search_repos(query,3 if os.getenv("GITHUB_TOKEN") else 2)
     except Exception as e:
-        print(f"[research] github search: {e}",flush=True); return 0
+        print(f"[research] github search: {e}",flush=True)
+        return 0
+
     for repo in repos:
-        full=repo.get("full_name","")
-        if not full: continue
+        full=str(repo.get("full_name") or "")
+        clone_url=str(repo.get("clone_url") or "")
+        if not full or not clone_url:
+            continue
+
         desc=repo.get("description") or ""
-        meta=f"Repository: {full}\nDescription: {desc}\nStars: {repo.get('stargazers_count',0)}\nLanguage: {repo.get('language')}\n"
-        if save_doc(worker,repo.get("html_url",""),full,meta,"github-meta"): added+=1
-        try:
-            root=github_contents(full,"")
-        except Exception as e:
-            print(f"[research] github contents {full}: {e}",flush=True); continue
-        if not isinstance(root,list): continue
-        candidates=[x for x in root if x.get("type")=="file" and Path(x.get("name","")).suffix.lower() in CODE_EXT]
-        # Prefer README + a few source/config files.
-        candidates=sorted(candidates,key=lambda x:(0 if x.get("name","").lower().startswith("readme") else 1, x.get("size",999999)))
-        max_files=20 if os.getenv("GITHUB_TOKEN") else 10
-        for item in candidates[:max_files]:
-            if int(item.get("size") or 0)>120_000: continue
+        meta=(
+            f"Repository: {full}\nDescription: {desc}\n"
+            f"Stars: {repo.get('stargazers_count',0)}\n"
+            f"Language: {repo.get('language')}\n"
+        )
+        if save_doc(worker,repo.get("html_url",""),full,meta,"github-meta"):
+            added+=1
+
+        with tempfile.TemporaryDirectory(prefix="reai-github-") as td:
+            checkout=Path(td)/"repo"
+            env=os.environ.copy()
+            env["GIT_TERMINAL_PROMPT"]="0"
             try:
-                d=github_contents(full,item.get("path",""))
-                enc=d.get("encoding")
-                content=d.get("content","")
-                if enc=="base64":
-                    raw=base64.b64decode(content)
-                    text=raw.decode("utf-8","replace")
-                else:
+                cp=subprocess.run(
+                    [
+                        "git","-c","core.hooksPath=/dev/null",
+                        "clone","--depth","1","--single-branch","--no-tags",
+                        "--filter=blob:limit=16m",clone_url,str(checkout)
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=180,
+                    env=env,
+                )
+                if cp.returncode:
+                    print(f"[research] github clone {full}: {cp.stderr[-500:]}",flush=True)
                     continue
-                src=d.get("html_url") or item.get("html_url") or repo.get("html_url","")
-                if save_doc(worker,src,f"{full}/{item.get('path','')}",text,"github-code"): added+=1
             except Exception as e:
-                print(f"[research] github file {full}/{item.get('path','')}: {e}",flush=True)
+                print(f"[research] github clone {full}: {e}",flush=True)
+                continue
+
+            repo_files=0
+            repo_bytes=0
+            for p in checkout.rglob("*"):
+                if not p.is_file() or ".git" in p.parts:
+                    continue
+                try:
+                    size=p.stat().st_size
+                    # Very large individual files are usually generated assets,
+                    # dumps, archives, vendored bundles, or binaries.
+                    if size > 16_000_000:
+                        continue
+                    raw=p.read_bytes()
+                except Exception:
+                    continue
+
+                # Binary detection. All text files are accepted regardless of extension.
+                if b"\x00" in raw[:8192]:
+                    continue
+                try:
+                    text=raw.decode("utf-8")
+                except UnicodeDecodeError:
+                    text=raw.decode("utf-8","replace")
+
+                if len(text.strip()) < 80:
+                    continue
+
+                rel=p.relative_to(checkout).as_posix()
+                src=f"https://github.com/{full}/blob/HEAD/{quote(rel)}"
+                if save_doc(worker,src,f"{full}/{rel}",text,"github-code"):
+                    added+=1
+                    repo_files+=1
+                    repo_bytes+=len(raw)
+
+            print(
+                f"[research] github full-repo {full}: "
+                f"text-files={repo_files} bytes={repo_bytes}",
+                flush=True,
+            )
     return added
 
 def fetch_web_topic(worker, topic):
