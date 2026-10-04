@@ -258,12 +258,16 @@ def build_and_train(workers, epochs):
           "--workers",str(workers),"--epochs",str(epochs),
           "--corpus-dir","data/worker-corpus"]
 
-    # Auto-detect the 50M sparse checkpoint so staged learning can never
-    # accidentally invoke the legacy tiny text trainer on a sparse model.
+    # Auto-detect the active checkpoint format so staged learning always
+    # invokes the matching trainer.
     worker0=ROOT/"models/workers/worker-0.bin"
     try:
-        if worker0.exists() and worker0.read_bytes()[:8] == b"REAISP21":
-            args += ["--engine","sparse"]
+        if worker0.exists():
+            magic=worker0.read_bytes()[:8]
+            if magic == b"REAIUC51":
+                args += ["--engine","unicode"]
+            elif magic == b"REAISP21":
+                args += ["--engine","sparse"]
     except OSError:
         pass
 
