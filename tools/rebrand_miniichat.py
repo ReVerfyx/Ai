@@ -21,8 +21,8 @@ android {
         applicationId = "studio.reverfyx.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.0.7"
+        versionCode = 10
+        versionName = "0.0.8"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -314,6 +314,19 @@ text = re.sub(
     '\n        HorizontalDivider',
     text,
     flags=re.S,
+)
+chat_ui.write_text(text, encoding="utf-8")
+
+# Hide "Regenerate" after failed requests. MiniiChat stores HTTP failures as
+# assistant text like "(error: HTTP 503: ...)", which upstream otherwise treats
+# as a successful non-empty assistant response.
+text = chat_ui.read_text(encoding="utf-8")
+text = text.replace(
+    '&& messages.last().content.isNotEmpty(),',
+    '&& messages.last().content.isNotEmpty()\n'
+    '                && !messages.last().content.trimStart().startsWith("(error:", ignoreCase = true)\n'
+    '                && !messages.last().content.trimStart().startsWith("HTTP ", ignoreCase = true)\n'
+    '                && !messages.last().content.contains("\\uFFFD"),'
 )
 chat_ui.write_text(text, encoding="utf-8")
 
