@@ -36,8 +36,21 @@ for w in [0,1]:
     if model.exists():
         st=model.stat()
         try:
-            magic=model.read_bytes()[:8]
-            engine="unicode5m" if magic==b"REAIUC51" else ("sparse50m" if magic==b"REAISP21" else "legacy")
+            raw=model.read_bytes()[:24]
+            magic=raw[:8]
+            if magic==b"REAIUC51" and len(raw)>=24:
+                import struct
+                dim,experts,ff,vocab=struct.unpack("<IIII",raw[8:24])
+                if (vocab,dim,experts,ff)==(512,64,40,144):
+                    engine="unicode800k"
+                elif (vocab,dim,experts,ff)==(1024,128,64,256):
+                    engine="unicode5m"
+                else:
+                    engine=f"unicode(v={vocab},d={dim},e={experts},ff={ff})"
+            elif magic==b"REAISP21":
+                engine="sparse50m"
+            else:
+                engine="legacy"
         except Exception:
             engine="?"
         print(f"worker-{w}: engine={engine} model={fmt_bytes(st.st_size)} updated={age(st.st_mtime)} ago")
