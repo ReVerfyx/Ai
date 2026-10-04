@@ -137,10 +137,10 @@ build_vocab(const std::string& corpus_path, uint32_t limit) {
         if (vocab.size() >= limit) break;
     }
 
-    while (vocab.size() < limit) {
-        const uint32_t cp = 0x0100u + static_cast<uint32_t>(vocab.size());
-        add(cp);
-        if (cp > 0x10FFFF) break;
+    uint32_t filler = 0x0100u;
+    while (vocab.size() < limit && filler <= 0x10FFFF) {
+        if (!(filler >= 0xD800 && filler <= 0xDFFF)) add(filler);
+        ++filler;
     }
 
     return vocab;
@@ -283,7 +283,7 @@ void UnicodeTextModel::train_file(const std::string& path, int epochs,
 
     const size_t natural = data.size() / static_cast<size_t>(std::max(1, seq_len));
     const size_t steps_per_epoch =
-        std::max<size_t>(1, std::min<size_t>(96, natural));
+        std::max<size_t>(1, std::min<size_t>(256, natural));
 
     for (int epoch = 1; epoch <= epochs; ++epoch) {
         double epoch_loss = 0.0;
