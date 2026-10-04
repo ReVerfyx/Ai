@@ -156,7 +156,7 @@ EOF
     echo "Logs: bash host.sh logs learn"
     ;;
 
-  upgrade50m|key-new|keys|chat|image|observe|improve|improve-auto|improve-once|improve-log)
+  upgrade50m|upgrade5m|key-new|keys|chat|image|observe|improve|improve-auto|improve-once|improve-log)
     require_local
     python3 "$ROOT/tools/manage.py" "$CMD" "$@"
     ;;
@@ -252,7 +252,8 @@ Legacy continuous Wikipedia training:
 Check real learning progress:
   bash host.sh progress
 
-50M / API / observer:
+Model profiles / API / observer:
+  bash host.sh upgrade5m
   bash host.sh upgrade50m
   bash host.sh key-new phone
   bash host.sh keys
