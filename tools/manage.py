@@ -135,10 +135,10 @@ After=reai.service network-online.target
 Type=simple
 User={os.getenv('USER','root')}
 WorkingDirectory={ROOT}
-ExecStart=/usr/bin/python3 {ROOT}/tools/self_improve.py --loop --interval 1800{extra}
+ExecStart=/usr/bin/python3 {ROOT}/tools/self_improve.py --loop --interval 300{extra}
 Restart=on-failure
 RestartSec=60
-Nice=12
+Nice=8
 [Install]
 WantedBy=multi-user.target
 """)
