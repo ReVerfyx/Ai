@@ -21,8 +21,8 @@ android {
         applicationId = "studio.reverfyx.ai"
         minSdk = 26
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.0.8"
+        versionCode = 11
+        versionName = "0.0.9"
         vectorDrawables { useSupportLibrary = true }
     }
 
@@ -347,5 +347,65 @@ text = re.sub(
     flags=re.S,
 )
 app_root.write_text(text, encoding="utf-8")
+
+# Do not persist HTTP/network failures as assistant messages.
+vm_file = app / "src/main/kotlin/com/miniichat/ChatViewModel.kt"
+text = vm_file.read_text(encoding="utf-8")
+old = '''                        .catch { e ->
+                            _error.value = e.message ?: "Request failed"
+                            val finalContent = if (builder.isEmpty()) "(error: ${e.message})" else builder.toString()
+                            appendAssistant(activeId, assistantId, finalContent)
+                        }'''
+new = '''                        .catch { e ->
+                            _error.value = e.message ?: "Request failed"
+                            removeAssistantPlaceholder(activeId, assistantId)
+                        }'''
+if old not in text:
+    raise SystemExit("ChatViewModel error anchor not found")
+text = text.replace(old, new)
+
+anchor = '''    private suspend fun appendAssistant(convId: String, msgId: String, content: String) {
+        val list = store.snapshot()
+        val conv = list.firstOrNull { it.id == convId } ?: return
+        val newMsgs = conv.messages.map { if (it.id == msgId) it.copy(content = content) else it }
+        store.upsert(conv.copy(messages = newMsgs, updatedAt = System.currentTimeMillis()))
+    }
+'''
+replacement = anchor + '''
+    private suspend fun removeAssistantPlaceholder(convId: String, msgId: String) {
+        val list = store.snapshot()
+        val conv = list.firstOrNull { it.id == convId } ?: return
+        val newMsgs = conv.messages.filterNot { it.id == msgId }
+        store.upsert(conv.copy(messages = newMsgs, updatedAt = System.currentTimeMillis()))
+    }
+'''
+if anchor not in text:
+    raise SystemExit("appendAssistant anchor not found")
+text = text.replace(anchor, replacement)
+vm_file.write_text(text, encoding="utf-8")
+
+# Show only a user-facing API message instead of raw HTTP/JSON.
+llm = app / "src/main/kotlin/com/miniichat/api/LlmClient.kt"
+text = llm.read_text(encoding="utf-8")
+old = '''                val errBody = runCatching { response.bodyAsText() }.getOrDefault("")
+                throw RuntimeException("HTTP ${response.status.value}: ${errBody.take(500)}")'''
+new = '''                val errBody = runCatching { response.bodyAsText() }.getOrDefault("")
+                val message = Regex("\\\\"message\\\\"\\\\s*:\\\\s*\\\\"([^\\\\"]+)\\\\"")
+                    .find(errBody)?.groupValues?.getOrNull(1)
+                throw RuntimeException(message ?: "Сервер временно не смог обработать запрос.")'''
+if old not in text:
+    raise SystemExit("LlmClient chat error anchor not found")
+text = text.replace(old, new)
+
+old2 = '''            val err = runCatching { resp.bodyAsText() }.getOrDefault("")
+            throw RuntimeException("HTTP ${resp.status.value}: ${err.take(300)}")'''
+new2 = '''            val err = runCatching { resp.bodyAsText() }.getOrDefault("")
+            val message = Regex("\\\\"message\\\\"\\\\s*:\\\\s*\\\\"([^\\\\"]+)\\\\"")
+                .find(err)?.groupValues?.getOrNull(1)
+            throw RuntimeException(message ?: "Не удалось связаться с AI-сервером.")'''
+if old2 not in text:
+    raise SystemExit("LlmClient models error anchor not found")
+text = text.replace(old2, new2)
+llm.write_text(text, encoding="utf-8")
 
 print("ReVerfyx MiniiChat patch applied to", root)
