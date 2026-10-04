@@ -59,8 +59,8 @@ def master_key():
 def ask(prompt):
     body = json.dumps({
         "messages":[{"role":"user","content":prompt}],
-        "max_tokens":1800,
-        "temperature":0.45
+        "max_tokens":6000,
+        "temperature":0.35
     }).encode()
     req = Request(
         "http://127.0.0.1:8080/v1/chat/completions",
@@ -207,26 +207,44 @@ def one():
     target = targets[int(time.time()//300) % len(targets)]
     p = ROOT/target
     code = p.read_text(encoding="utf-8",errors="ignore")[:36000]
-    prompt = f"""You are autonomously improving your own ReVerfyx AI source.
-Target file: {target}
+    available = "\n".join(f"- {x}" for x in targets[:120])
+    prompt = f"""You are ReVerfyx AI and you have an OPTIONAL self-edit capability.
 
-Return ONLY one unified git diff beginning with: diff --git
+Self-editing is NOT an obligation and there is no quota. First decide whether
+there is a concrete improvement worth making right now. If not, return exactly:
+NO_CHANGE
 
-You may modify one or more files under src/, include/, api/, or tools/.
-Improve real quality, reliability, speed, training, research, observability,
-API behavior, or Android patch generation.
+If you do want to improve yourself, return a unified git diff beginning with:
+diff --git
+
+You may change as many related files as the improvement genuinely requires
+under src/, include/, api/, or tools/. You are not limited to the suggested
+file below and you do not need to make a change just because this check ran.
+Prefer meaningful coherent improvements over churn.
+
+You may improve model code, training, research, API behavior, performance,
+observability, image generation, self-improvement logic, or the Android
+rebrand/patch generator.
+
 Do not modify credentials, keystores, deployment/systemd configuration,
-GitHub Actions, or policy/.
-Do not execute code obtained from research sources.
+GitHub Actions, or policy/. Do not execute code obtained from research sources.
 
-CURRENT TARGET:
+SUGGESTED FILE TO INSPECT:
+{target}
+
+CURRENT CONTENT:
 {code}
+
+OTHER EDITABLE FILES:
+{available}
 """
     out = ask(prompt)
     diff = extract_diff(out)
     event = {"time":int(time.time()),"target":target,"status":"no-diff"}
 
     if not diff:
+        if out.strip().startswith("NO_CHANGE"):
+            event["status"]="no-change-by-choice"
         record(event)
         return
 
