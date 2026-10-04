@@ -148,6 +148,9 @@ EOF
 
     sudo systemctl daemon-reload
     sudo systemctl enable --now reai-learning
+    if [[ "$CMD" == "learn" ]]; then
+      sudo python3 "$ROOT/tools/manage.py" improve-auto || true
+    fi
     echo "LEARNING STARTED: $CMD"
     echo "Progress: bash host.sh progress"
     echo "Logs: bash host.sh logs learn"
