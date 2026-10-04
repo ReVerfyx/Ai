@@ -27,6 +27,18 @@ jobs:
           ./build/reai sparse-train /tmp/sparse.bin /tmp/sparse-corpus.txt 1 4 0.001
           ./build/reai sparse-generate /tmp/sparse.bin hello 8 1.0 8 >/tmp/sparse-out.txt
 
+      - name: Smoke test Unicode 5M checkpoint
+        run: |
+          printf 'Привет мир. Это тест Unicode модели. hello world.\n' > /tmp/unicode-corpus.txt
+          ./build/reai unicode-init /tmp/unicode.bin /tmp/unicode-corpus.txt 512 32 4 64 123
+          ./build/reai unicode-info /tmp/unicode.bin
+          ./build/reai unicode-train /tmp/unicode.bin /tmp/unicode-corpus.txt 1 4 0.001
+          ./build/reai unicode-generate /tmp/unicode.bin 'Привет' 8 1.0 8 >/tmp/unicode-out.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          Path('/tmp/unicode-out.txt').read_text(encoding='utf-8')
+          PY
+
       - name: Smoke test image checkpoint
         run: |
           ./build/reai image-init /tmp/image.bin 4 8
