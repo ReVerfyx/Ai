@@ -241,7 +241,7 @@ def main():
     ap.add_argument("--bootstrap-pages",type=int,default=6)
     ap.add_argument("--epochs",type=int,default=1)
     ap.add_argument("--sleep",type=int,default=120)
-    ap.add_argument("--max-data-gb",type=float,default=20)
+    ap.add_argument("--max-data-gb",type=float,default=0)
     ap.add_argument("--train-every",type=int,default=4,
                     help="Train after this many research cycles; larger values prioritize faster data collection")
     a=ap.parse_args()
@@ -280,7 +280,7 @@ def main():
                 print(f"[research] training error: {e}",flush=True)
         else:
             print(f"[research] collected cycle={cycle}; next training in {train_every-(cycle % train_every)} cycle(s)",flush=True)
-        time.sleep(max(10,a.sleep))
+        time.sleep(max(5,a.sleep))
 
 if __name__=="__main__":
     main()
