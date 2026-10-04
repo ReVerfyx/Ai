@@ -197,6 +197,24 @@ class Handler(BaseHTTPRequestHandler):
                 generated = text[len(prompt):] if text.startswith(prompt) else text
                 generated = generated.strip()
 
+                # Undertrained byte-level checkpoints can emit invalid UTF-8.
+                # Do not surface replacement-character garbage as a successful reply.
+                replacement_count = generated.count("\ufffd")
+                control_count = sum(
+                    1 for ch in generated
+                    if ord(ch) < 32 and ch not in "\n\r\t"
+                )
+                if (
+                    not generated
+                    or replacement_count >= 2
+                    or (generated and replacement_count / max(1, len(generated)) > 0.01)
+                    or control_count > 0
+                ):
+                    return self.send_json(503, {
+                        "error": "model_output_not_ready",
+                        "message": "Модель ещё обучается: сгенерированный ответ не прошёл проверку текста."
+                    })
+
                 ok, rule = check_generated_text(generated, user_prompt, "chat")
                 if not ok:
                     generated = "Не могу помочь с этим запросом."
