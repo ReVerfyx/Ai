@@ -110,7 +110,7 @@ def github_contents(owner_repo, path=""):
     url=f"https://api.github.com/repos/{owner_repo}/contents/{quote(path)}"
     return http_json(url,github_headers())
 
-def fetch_github_topic(worker, topic):
+def fetch_github_topic(worker, topic, brain=None):
     """Pick repositories for a topic and ingest each selected repo as a whole.
 
     Repositories are shallow-cloned into a temporary directory. No downloaded
@@ -203,9 +203,10 @@ def fetch_github_topic(worker, topic):
                 f"text-files={repo_files} bytes={repo_bytes}",
                 flush=True,
             )
-            brain=load_brain()
-            maybe_sandbox_repo(worker, query, checkout, full, brain)
-            save_brain(brain)
+            active_brain=brain if brain is not None else load_brain()
+            maybe_sandbox_repo(worker, query, checkout, full, active_brain)
+            if brain is None:
+                save_brain(active_brain)
     return added
 
 def fetch_web_topic(worker, topic):
@@ -471,7 +472,7 @@ def main():
             print(f"[research] cycle={cycle} worker={w} topic={topic['id']}",flush=True)
             wiki=fetch_wiki_topic(w,topic)
             random_wiki=fetch_random_wiki(w,12)
-            gh=fetch_github_topic(w,topic)
+            gh=fetch_github_topic(w,topic,brain)
             web=fetch_web_topic(w,topic)
             gained=wiki+random_wiki+gh+web
             st.setdefault("coverage",{})[topic["id"]]=st["coverage"].get(topic["id"],0)+gained
