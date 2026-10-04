@@ -71,6 +71,78 @@ def cmd_upgrade50m():
         print(p, f"{p.stat().st_size/1024/1024:.1f} MB")
     print("50M sparse profile enabled.")
 
+def cmd_upgrade5m():
+    run(["apt-get","update"])
+    run(["apt-get","install","-y","build-essential","cmake","python3","git"])
+    run(["cmake","-S",ROOT,"-B",ROOT/"build","-DCMAKE_BUILD_TYPE=Release"])
+    run(["cmake","--build",ROOT/"build","-j",str(max(1,os.cpu_count() or 1))])
+
+    workers=ROOT/"models/workers"
+    legacy=ROOT/"models/legacy"
+    corpus_dir=ROOT/"data/worker-corpus"
+    workers.mkdir(parents=True,exist_ok=True)
+    legacy.mkdir(parents=True,exist_ok=True)
+    corpus_dir.mkdir(parents=True,exist_ok=True)
+    stamp=time.strftime("%Y%m%d-%H%M%S")
+
+    for i,seed in ((0,1337),(1,9256)):
+        p=workers/f"worker-{i}.bin"
+        corpus=corpus_dir/f"worker-{i}.txt"
+
+        if not corpus.exists() or corpus.stat().st_size < 2048:
+            web=ROOT/"data/web"/f"worker-{i}"
+            if web.exists():
+                run([
+                    "python3",ROOT/"tools/build_corpus.py",web,
+                    "--out",corpus
+                ],check=False)
+
+        if not corpus.exists() or corpus.stat().st_size < 512:
+            corpus.write_text(
+                ("ReVerfyx AI учится читать и писать по-русски. "
+                 "Artificial intelligence learns text from scratch. "
+                 "Привет мир программирование наука история язык код данные.\n")*128,
+                encoding="utf-8"
+            )
+
+        is_unicode=False
+        old_magic=b""
+        if p.exists():
+            with p.open("rb") as fh:
+                old_magic=fh.read(8)
+            is_unicode=old_magic==b"REAIUC51"
+
+        if p.exists() and not is_unicode:
+            label=old_magic.decode("ascii","ignore") or "legacy"
+            shutil.copy2(p,legacy/f"worker-{i}-{stamp}-{label}.bin")
+            p.unlink()
+
+        if not p.exists():
+            run([
+                ROOT/"build/reai","unicode-init",p,corpus,
+                "1024","128","64","256",str(seed)
+            ])
+
+    if not KEYS.exists():
+        KEYS.write_text('{"keys":[]}\n')
+        KEYS.chmod(0o600)
+
+    env_set(AI_ENV,"REAI_TEXT_MODEL",ROOT/"models/workers/worker-0.bin")
+    env_set(AI_ENV,"REAI_API_KEYS_FILE",KEYS)
+
+    learn_env=Path("/etc/reai-learning.env")
+    if learn_env.exists():
+        env_set(learn_env,"REAI_TRAIN_ENGINE","unicode")
+
+    run(["systemctl","restart","reai"],check=False)
+    if run(["systemctl","list-unit-files"],check=False,capture_output=True,text=True).stdout.find("reai-learning.service")>=0:
+        run(["systemctl","restart","reai-learning"],check=False)
+
+    run([ROOT/"build/reai","unicode-info",workers/"worker-0.bin"])
+    for p in sorted(workers.glob("worker-*.bin")):
+        print(p, f"{p.stat().st_size/1024/1024:.1f} MB")
+    print("Fast Unicode ~5M profile enabled. Previous checkpoints are preserved in models/legacy.")
+
 def load_keys():
     try:return json.loads(KEYS.read_text())
     except Exception:return {"keys":[]}
@@ -153,6 +225,7 @@ def main():
     cmd=sys.argv[1] if len(sys.argv)>1 else ""
     args=sys.argv[2:]
     if cmd=="upgrade50m":cmd_upgrade50m()
+    elif cmd=="upgrade5m":cmd_upgrade5m()
     elif cmd=="key-new":cmd_key_new(args[0] if args else "client")
     elif cmd=="keys":cmd_keys()
     elif cmd=="chat":cmd_chat(" ".join(args) or "Привет")
