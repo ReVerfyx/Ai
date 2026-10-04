@@ -390,8 +390,10 @@ text = llm.read_text(encoding="utf-8")
 old = '''                val errBody = runCatching { response.bodyAsText() }.getOrDefault("")
                 throw RuntimeException("HTTP ${response.status.value}: ${errBody.take(500)}")'''
 new = '''                val errBody = runCatching { response.bodyAsText() }.getOrDefault("")
-                val message = Regex("\\\\"message\\\\"\\\\s*:\\\\s*\\\\"([^\\\\"]+)\\\\"")
-                    .find(errBody)?.groupValues?.getOrNull(1)
+                val message = runCatching {
+                    val obj = json.parseToJsonElement(errBody) as? JsonObject
+                    (obj?.get("message") as? JsonPrimitive)?.content
+                }.getOrNull()
                 throw RuntimeException(message ?: "Сервер временно не смог обработать запрос.")'''
 if old not in text:
     raise SystemExit("LlmClient chat error anchor not found")
@@ -400,8 +402,10 @@ text = text.replace(old, new)
 old2 = '''            val err = runCatching { resp.bodyAsText() }.getOrDefault("")
             throw RuntimeException("HTTP ${resp.status.value}: ${err.take(300)}")'''
 new2 = '''            val err = runCatching { resp.bodyAsText() }.getOrDefault("")
-            val message = Regex("\\\\"message\\\\"\\\\s*:\\\\s*\\\\"([^\\\\"]+)\\\\"")
-                .find(err)?.groupValues?.getOrNull(1)
+            val message = runCatching {
+                val obj = json.parseToJsonElement(err) as? JsonObject
+                (obj?.get("message") as? JsonPrimitive)?.content
+            }.getOrNull()
             throw RuntimeException(message ?: "Не удалось связаться с AI-сервером.")'''
 if old2 not in text:
     raise SystemExit("LlmClient models error anchor not found")
