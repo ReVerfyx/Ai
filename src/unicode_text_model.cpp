@@ -133,22 +133,27 @@ build_vocab(const std::string& corpus_path, uint32_t limit) {
     add(0x00BB); // »
     add(0x2026); // …
 
-    std::vector<std::pair<uint32_t, uint64_t>> ranked(freq.begin(), freq.end());
-    std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
-        if (a.second != b.second) return a.second > b.second;
-        return a.first < b.first;
-    });
+    // Large profiles may learn additional Unicode characters from the corpus.
+    // Tiny <=256 profiles intentionally stay Russian/ASCII-focused so scarce
+    // probability mass is not wasted on random rare scripts.
+    if (limit > 256) {
+        std::vector<std::pair<uint32_t, uint64_t>> ranked(freq.begin(), freq.end());
+        std::sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) {
+            if (a.second != b.second) return a.second > b.second;
+            return a.first < b.first;
+        });
 
-    for (const auto& [cp, count] : ranked) {
-        (void)count;
-        add(cp);
-        if (vocab.size() >= limit) break;
-    }
+        for (const auto& [cp, count] : ranked) {
+            (void)count;
+            add(cp);
+            if (vocab.size() >= limit) break;
+        }
 
-    uint32_t filler = 0x0100u;
-    while (vocab.size() < limit && filler <= 0x10FFFF) {
-        if (!(filler >= 0xD800 && filler <= 0xDFFF)) add(filler);
-        ++filler;
+        uint32_t filler = 0x0100u;
+        while (vocab.size() < limit && filler <= 0x10FFFF) {
+            if (!(filler >= 0xD800 && filler <= 0xDFFF)) add(filler);
+            ++filler;
+        }
     }
 
     return vocab;
