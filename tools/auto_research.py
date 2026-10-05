@@ -402,6 +402,18 @@ def build_and_train(workers, epochs):
 
     subprocess.check_call(args)
 
+    # Always finish a Unicode research cycle with a short dialogue refresher.
+    # Otherwise an unlimited general-web corpus quickly overwhelms the tiny
+    # model's ability to remember the basic user:/assistant: format.
+    try:
+        if worker0.exists() and worker0.read_bytes()[:8] == b"REAIUC51" and warmup.exists():
+            subprocess.check_call([
+                str(ROOT/"build/reai"), "unicode-train", str(worker0), str(warmup),
+                "1", "48", "0.0015"
+            ])
+    except (OSError, subprocess.CalledProcessError) as e:
+        print(f"[research] unicode warm-up refresher failed: {e}", flush=True)
+
 def bootstrap(workers, pages_per_topic, epochs):
     print("[learn] stage=bootstrap wikipedia",flush=True)
     # broad, deterministic first pass
