@@ -188,13 +188,13 @@ def cmd_upgrade800k():
 
     run([
         ROOT/"build/reai","unicode-init",p,init_corpus,
-        "192","64","40","144","1337"
+        "192","128","1","256","1337"
     ])
 
-    print("[unicode800k] focused Russian warm-up: 20 epochs")
+    print("[unicode-fast] dense 1-expert Russian warm-up: 20 epochs")
     run([
         ROOT/"build/reai","unicode-train",p,warmup,
-        "20","48","0.0007"
+        "20","48","0.002"
     ])
 
     if not KEYS.exists():
@@ -214,7 +214,7 @@ def cmd_upgrade800k():
 
     run([ROOT/"build/reai","unicode-info",p])
     print(p, f"{p.stat().st_size/1024/1024:.2f} MB")
-    print("Fast Unicode ~0.8M profile enabled.")
+    print("Fast dense Unicode profile enabled.")
     print("Previous checkpoints are preserved in models/legacy.")
 
 def load_keys():
