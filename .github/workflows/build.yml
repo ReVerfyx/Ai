@@ -52,6 +52,37 @@ jobs:
           assert '重' not in s
           PY
 
+      - name: Smoke test fast dense Unicode profile
+        run: |
+          python3 tools/make_warmup_corpus.py
+          ./build/reai unicode-init /tmp/fast.bin data/warmup/ru-basic.txt 192 128 1 256 1337
+          ./build/reai unicode-info /tmp/fast.bin
+          ./build/reai unicode-train /tmp/fast.bin data/warmup/ru-basic.txt 1 16 0.002
+          ./build/reai unicode-generate /tmp/fast.bin         run: |
+          ./build/reai image-init /tmp/image.bin 4 8
+          python3 - <<'PY'
+          from pathlib import Path
+          Path('/tmp/a.ppm').write_bytes(b'P6\n4 4\n255\n' + bytes([255,0,0]) * 16)
+          Path('/tmp/images.tsv').write_text('/tmp/a.ppm\ta red square\n')
+          PY
+          ./build/reai image-train /tmp/image.bin /tmp/images.tsv 1 0.001
+          ./build/reai image-generate /tmp/image.bin 'a red square' /tmp/out.ppm 4
+
+      - name: Python syntax
+        run: |
+          python3 -m py_compile api/server.py gateway/server.py policy/engine.py policy/runtime.py
+          python3 -m py_compile tools/crawl.py tools/build_corpus.py tools/multi_train.py tools/self_learn.py tools/wiki_fetch.py tools/auto_research.py tools/progress.py tools/web_search.py tools/observer.py tools/self_improve.py tools/manage.py tools/make_warmup_corpus.py tools/sandbox_exec.py
+          PYTHONPATH=. python3 policy/test_runtime.py
+
+      - name: Policy tests
+        run: python3 policy/test_policy.py
+user: Кто ты?\nassistant:' 24 0.3 4 >/tmp/fast-out.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('/tmp/fast-out.txt').read_text(encoding='utf-8')
+          assert '�' not in text
+          PY
+
       - name: Smoke test image checkpoint
         run: |
           ./build/reai image-init /tmp/image.bin 4 8
