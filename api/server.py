@@ -232,14 +232,19 @@ class Handler(BaseHTTPRequestHandler):
                 # Runtime policy is enforced outside the model, so do not drown
                 # a sub-million-parameter model in a long hidden control prompt.
                 if engine == "unicode":
-                    dialogue = "\n".join(
-                        line for line in normalized
-                        if line.startswith("user:") or line.startswith("assistant:")
-                    )
-                    prompt = dialogue[-4000:].rstrip() + "\nassistant:"
-                    temperature = min(float(data.get("temperature", 0.55)), 0.65)
-                    top_k = min(max(2, int(data.get("top_k", 12))), 16)
-                    tokens = max(1, min(int(data.get("max_tokens", 160)), 240))
+                    # During the fast experiment, old assistant garbage in chat
+                    # history is harmful training context. Condition only on the
+                    # latest visible user turn and the exact dialogue marker used
+                    # by the warm-up corpus.
+                    latest_user = ""
+                    for line in reversed(normalized):
+                        if line.startswith("user:"):
+                            latest_user = line[len("user:"):].strip()
+                            break
+                    prompt = f"user: {latest_user}\nassistant:"
+                    temperature = min(float(data.get("temperature", 0.30)), 0.40)
+                    top_k = min(max(1, int(data.get("top_k", 4))), 6)
+                    tokens = max(1, min(int(data.get("max_tokens", 96)), 160))
                 else:
                     prompt = control_prefix() + user_prompt
                     temperature = float(data.get("temperature", 0.9))
